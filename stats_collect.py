@@ -34,13 +34,13 @@ class MyTimeStamp():
     # Used to get the timestamp with seconds or minutes
     # By default, it is by minute
     @classmethod
-    def getTimeStamp(cls, time_granularity=""):
+    def getDateAndTime(cls, time_granularity=""):
         if (SECOND == time_granularity):
-            return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            return (datetime.datetime.now().strftime("%Y-%m-%d"), datetime.datetime.now().strftime("%H:%M:%S"))
         elif (MINUTE == time_granularity):
-            return datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+            return (datetime.datetime.now().strftime("%Y-%m-%d"), datetime.datetime.now().strftime("%H:%M"))
         else:
-            return datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+            return (datetime.datetime.now().strftime("%Y-%m-%d"), datetime.datetime.now().strftime("%H:%M:%S"))
 
 
 # This class is for cache instance
@@ -192,8 +192,8 @@ class CasPerfStats:
         return os.path.join(WORKING_DIR, "casPerfStats_{0}.csv".format(self.timeStarted))
 
     def dumpOneDataLine(self, line, cache_id):
-        time_str = MyTimeStamp.getTimeStamp(SECOND)
-        new_line = "{0}, {1}, {2}\n".format(time_str, cache_id, line)
+        (date_str, time_str) = MyTimeStamp.getDateAndTime(SECOND)
+        new_line = "{0}, {1}, {2}, {3}\n".format(date_str, time_str, cache_id, line)
         outF = open(self.getDumpFilePath(), "a")
         outF.writelines(new_line)
         outF.close()
@@ -202,6 +202,11 @@ class CasPerfStats:
     def getRawStats(self, cache_id, core_id):
         stats_cmd = 'casadm -P -i {0} -j {1} -o csv'.format(cache_id, core_id)
         stats_output = subprocess.check_output(stats_cmd, shell=True)
+        return stats_output
+
+    def resetPerfStat(self, cache_id, core_id):
+        reset_cmd = 'casadm -Z -i {0} -j {1}'.format(cache_id, core_id)
+        stats_output = subprocess.check_output(reset_cmd, shell=True)
         return stats_output
 
     def parseRawStats(self, stats_output, cache_id):
@@ -215,7 +220,7 @@ class CasPerfStats:
             return 0
         elif (True == self.dump_header):
             # print "Dump header"
-            new_header = "{0},{1},{2}\n".format("TimeStamp", "Cache Id", lines[0])
+            new_header = "{0},{1},{2},{3}\n".format("Date", "Time", "Cache Id", lines[0])
             outF = open(self.getDumpFilePath(), "w+")
             outF.writelines(new_header)
             outF.close()
@@ -233,6 +238,7 @@ class CasPerfStats:
         for cache_volume in cache_volume_list:
             # print "Trying to get stats for {0} {1}".format(cache_volume.cacheID, cache_volume.coreID)
             raw_info = self.getRawStats(cache_volume.cacheID, cache_volume.coreID)
+            self.resetPerfStat(cache_volume.cacheID, cache_volume.coreID)
             self.parseRawStats(raw_info, cache_volume.cacheID)
         return 0
 
@@ -261,15 +267,15 @@ class IoStats:
         return os.path.join(WORKING_DIR, "IOStat_{0}.csv".format(self.timeStarted))
 
     def dumpOneDataLine(self, line):
-        time_str = MyTimeStamp.getTimeStamp(SECOND)
-        new_line = "{0},{1}\n".format(time_str, line)
+        (date_str, time_str) = MyTimeStamp.getDateAndTime(SECOND)
+        new_line = "{0},{1},{2}\n".format(date_str, time_str, line)
         outF = open(self.getDumpFilePath(), "a")
         outF.writelines(new_line)
         outF.close()
         return 0
         
     def dumpHeaderLine(self, line):
-        new_header = "{0}, {1}\n".format("TimeStamp", line)
+        new_header = "{0}, {1}, {2}\n".format("Date", "Time", line)
         outF = open(self.getDumpFilePath(), "w+")
         outF.writelines(new_header)
         outF.close()
