@@ -238,7 +238,7 @@ class CasPerfStats:
         for cache_volume in cache_volume_list:
             # print "Trying to get stats for {0} {1}".format(cache_volume.cacheID, cache_volume.coreID)
             raw_info = self.getRawStats(cache_volume.cacheID, cache_volume.coreID)
-            self.resetPerfStat(cache_volume.cacheID, cache_volume.coreID)
+            # self.resetPerfStat(cache_volume.cacheID, cache_volume.coreID)
             self.parseRawStats(raw_info, cache_volume.cacheID)
         return 0
 
