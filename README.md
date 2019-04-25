@@ -17,7 +17,9 @@ This is what the above command will do:
 ## Collect all CAS related block devices' IOSTAT/CAS Perf data on one machine
 The tool *collectStats.py* can be used collect CAS related block devices' IOSTAT/CAS Perf data. 
 Example usage:
-```python collectStats.py -C 20 -T 600 -O /root/Smart-Storage/data &```
+```
+python collectStats.py -C 20 -T 600 -O /root/Smart-Storage/data &
+```
 This is what the above command will do:
 - Will keep collecting the iostat and "casadm -P -i" for 600 (-T) seconds
 - Collect the data every 20 (-C) seconds
