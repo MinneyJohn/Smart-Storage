@@ -6,14 +6,7 @@ import shlex
 
 from statsHelper import *
 from fioHelper import *
-
-import logging
- 
-logging.basicConfig(level=logging.DEBUG,
-                    filename='running.log',
-                    datefmt='%Y/%m/%d %H:%M:%S',
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(lineno)d - %(module)s - %(message)s')
-logger = logging.getLogger(__name__)
+from loggerHelper import *
 
 def setupArgsParser():
     global arg_parser
@@ -25,10 +18,18 @@ def setupArgsParser():
     return 0
 
 def verifyArgs(args):
-    if False == casAdmin.isCacheCoreClear(args.cache, args.core):
+    if (False == casAdmin.blockDeviceExist(args.cache) 
+        or False == casAdmin.blockDeviceExist(args.core)):
+        print "**SORRY** Please make sure {0} and {1} do exist\n".format(args.cache, args.core)
+        exit(1)    
+    elif (True == casAdmin.hasPartionOnDev(args.cache) 
+        or True == casAdmin.hasPartionOnDev(args.core)):
+        print "**SORRY** Please make sure {0} and {1} does NOT have partition\n".format(args.cache, args.core)
+        exit(1)
+    elif False == casAdmin.isCacheCoreClear(args.cache, args.core):
         print "**SORRY** Please make sure {0} and {1} NOT being used\n".format(args.cache, args.core)
         exit(1)
-    if False == os.path.isdir(args.output):
+    elif False == os.path.isdir(args.output):
         print "**SORRY** Please make sure dir {0} exist".format(args.output)
         exit(1)
 
@@ -41,13 +42,17 @@ if __name__ == "__main__":
     cacheDev = args.cache
     coreDev = args.core
     output  = args.output
+
+    logger.info("\n\n")
+    logger.info("Entry Point to start CAS baseline test")
+    logger.info("Caching Device is {0}, Core Device is {1}".format(cacheDev, coreDev))
     
     # Used this event to notify stats collection to quit
     fioFinishEvent = threading.Event()
 
     # Check existing caches
-    SetOfCacheVolume.fetchCacheVolumeSet()
-    SetOfCacheVolume.showCacheVolumeSet()
+    casAdmin.refreshCacheVolumeSet()
+    casAdmin.showCacheVolumeSet()
 
     # Prepare Stats Collecting Threads
     #casPerfStatsObj = CasPerfStats(DEFAULT_CYCLE_TIME, int(RUNNING_TO_END/DEFAULT_CYCLE_TIME), fioFinishEvent)
@@ -59,8 +64,10 @@ if __name__ == "__main__":
     testCase = baselineCacheCorePair(cacheDev, coreDev, fioFinishEvent)
     
     # Generate working threads
-    thread_collect_cas    = threading.Thread(target=casPerfStatsObj.startCollectStats) 
-    thread_collect_iostat = threading.Thread(target=ioStatsObj.startCollectStats) 
+    thread_collect_cas    = threading.Thread(target=casPerfStatsObj.startCollectStats)
+    thread_collect_iostat = threading.Thread(target=ioStatsObj.startCollectStats,
+                                             kwargs={"cacheDev": cacheDev, 
+                                                     "coreDev": coreDev}) 
     thread_run_fio_jobs   = threading.Thread(target=testCase.do)
     
     # Start the threads
@@ -73,6 +80,5 @@ if __name__ == "__main__":
     thread_collect_iostat.join()
     thread_run_fio_jobs.join()
 
-    logger.info("Ready to exit the baseline test")
-
+    logger.info("Exit Point of CAS baseline Test\n\n\n")
     exit(0)

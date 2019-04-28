@@ -1,6 +1,5 @@
 #! /usr/bin/python
 
-import subprocess
 import threading
 import time
 import re
@@ -9,21 +8,9 @@ import datetime
 import os
 from threading import Timer
 import argparse
-import shlex
 
-from statsHelper import *
-import logging
- 
-logging.basicConfig(level=logging.DEBUG,
-                    filename='running.log',
-                    datefmt='%Y/%m/%d %H:%M:%S',
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(lineno)d - %(module)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-# This time is be long enough to make FIO exit due to "--size" limit is hit 
-RUNNING_TO_END = 36000
-DEFAULT_CYCLE_TIME = 60
-
+from adminHelper import *
+from loggerHelper import *
 
 '''
 The customer wants to see those information for one caching software
@@ -87,7 +74,7 @@ class jobFIO():
 
     def execute(self):
         # FOR DEBUG 
-        # self.setParm("runtime", 20)
+        # self.setParm("runtime", 10)
         # self.setParm("time_based")
         
         fio_cmd = "fio {0}".format(self.genParmStr())
@@ -158,119 +145,6 @@ class jobSeqRead(jobFIO):
             self.setParm("runtime", RUNNING_TO_END)
         self.execute()
         return 0
-
-# Used to config/prepare cache environment
-class casAdmin():
-    @classmethod 
-    def cfgCacheCorePair(cls, cacheDev, coreDev, cacheMode = "wb"):
-        cacheID = casAdmin.getAvailableCacheID()
-        cls.cfgCacheInstance(cacheID, cacheDev, coreDev, cacheMode)
-        return 0
-    
-    @classmethod
-    def cfgCacheInstance(cls, cacheID, cacheDev, coreDev, cacheMode):
-        cls.startCache(cacheID, cacheDev)
-        cls.addCore(cacheID, coreDev)
-        cls.setCacheMode(cacheID, cacheMode)
-        return 0
-    
-    @classmethod
-    def addCore(cls, cacheID, coreDev):
-        addCoreCmd = "casadm -A -i {0} -d {1}".format(cacheID, coreDev)
-        cls.getOutPutOfCmd(addCoreCmd)
-        return 0
-
-    @classmethod
-    def startCache(cls, cacheID, cacheDev):
-        startCacheCmd = "casadm -S -i {0} -d {1} --force".format(cacheID, cacheDev)
-        cls.getOutPutOfCmd(startCacheCmd)
-        return 0
-    
-    @classmethod
-    def setCacheMode(cls, cacheID, cacheMode):
-        setCacheModeCmd = "casadm -Q -c {0} -i {1}".format(cacheMode, cacheID)
-        cls.getOutPutOfCmd(setCacheModeCmd)
-        return 0
-
-    @classmethod
-    def stopCacheInstance(cls, cacheID):
-        stop_cache = "casadm -T -i {0} -n".format(cacheID)
-        cls.getOutPutOfCmd(stop_cache)
-        return 0
-    
-    @classmethod
-    def reCfgCacheCorePair(cls, cacheDev, coreDev, cacheMode = "wb"):
-        cls.stopCacheInstance(cls.getIdByCacheDev(cacheDev))
-        cls.cfgCacheCorePair(cacheDev, coreDev, cacheMode)
-        return 0
-    
-    @classmethod
-    def isCacheCoreClear(cls, cacheDev, coreDev):
-        check_cmd = "casadm -L -o csv | egrep \"{0}|{1}\"".format(cacheDev, coreDev)
-        try:
-            output = cls.getOutPutOfCmd(check_cmd)
-        except Exception, e:
-            return True
-        
-        return False
-    
-    @classmethod
-    def getAvailableCacheID(cls):
-        cache_id_list = set()
-        (instance_list, volume_list) = SetOfCacheVolume.fetchCacheVolumeSet()
-        for instance in instance_list:
-            cache_id_list.add(int(instance.cacheID))
-        cache_id_list = sorted(cache_id_list)
-        cur_cache_id = 1
-        while (cur_cache_id in cache_id_list):
-            cur_cache_id = cur_cache_id + 1
-        return cur_cache_id
-    
-    @classmethod
-    def getIdByCacheDev(cls, cacheDev):
-        cmd_str = "casadm -L -o csv | grep \"cache,\" | grep \"{0}\"".format(cacheDev)
-        output = cls.getOutPutOfCmd(cmd_str)
-        words = cls.getWordsOfLine(output)
-        return int(words[1])
-    
-    @classmethod
-    def getIntelDiskByCoreDev(cls, coreDev):
-        cmd_str = "casadm -L -o csv | grep \"{0}\" | grep intelcas".format(coreDev)
-        output = cls.getOutPutOfCmd(cmd_str)
-        words = cls.getWordsOfLine(output)
-        #print "output {0}".format(output)
-        #print "words {0}".format(words)
-        return words[5]
-
-    @classmethod
-    def getCoreSize(cls, coreDev):
-        coreDev_noPre = coreDev.replace("/dev/", "")
-        cmd_str = "lsblk {0} -b -o NAME,SIZE|grep \"{1} \"".format(coreDev, coreDev_noPre)
-        output = cls.getOutPutOfCmd(cmd_str)
-        words = cls.getWordsOfLine(output)
-        return "{0}G".format((int(words[1])/1024/1024/1024))
-
-    @classmethod
-    def getCacheSize(cls, cacheDev):
-        cacheID = cls.getIdByCacheDev(cacheDev)
-        cmd_str = "casadm -P -i {0}| grep \"Cache Size\"".format(cacheID)
-        output = cls.getOutPutOfCmd(cmd_str)
-        words = cls.getWordsOfLine(output)
-        return "{0}G".format(int(float(words[6])))
-    
-    @classmethod
-    def getOutPutOfCmd(cls, commandStr):
-        output = subprocess.check_output(commandStr, shell=True)
-        return output.strip(" ").rstrip(" \n")
-    
-    @classmethod
-    def getWordsOfLine(cls, line):
-        words = re.split(",| ", line)
-        valid_words = []
-        for word in words:
-            if word:
-                valid_words.append(word)
-        return valid_words
 
 class resetCacheJob():
     def __init__(self, cacheDev):

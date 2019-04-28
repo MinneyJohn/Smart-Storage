@@ -11,19 +11,8 @@ from threading import Timer
 import argparse
 import shlex
 
-import logging
-
-logging.basicConfig(level=logging.DEBUG,
-                    filename='running.log',
-                    datefmt='%Y/%m/%d %H:%M:%S',
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(lineno)d - %(module)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-
-SECOND = "SECOND"
-MINUTE = "MINUTE"
-
-INVALID_CACHE_ID = -100
+from adminHelper import *
+from loggerHelper import *
 
 '''
 This script is supposed to use only standard python 2.7 library,
@@ -34,148 +23,6 @@ advanced python scripts with more advanced libraries.
 '''
 
 # This class is used to do our own time working
-class MyTimeStamp():
-    def __init__(self):
-        return 0
-    
-    @classmethod
-    def getAppendTime(cls):
-        return datetime.datetime.now().strftime("%Y_%m_%d_%H_%M")
-    
-    # Used to get the timestamp with seconds or minutes
-    # By default, it is by minute
-    @classmethod
-    def getDateAndTime(cls, time_granularity=""):
-        if (SECOND == time_granularity):
-            return (datetime.datetime.now().strftime("%Y-%m-%d"), datetime.datetime.now().strftime("%H:%M:%S"))
-        elif (MINUTE == time_granularity):
-            return (datetime.datetime.now().strftime("%Y-%m-%d"), datetime.datetime.now().strftime("%H:%M"))
-        else:
-            return (datetime.datetime.now().strftime("%Y-%m-%d"), datetime.datetime.now().strftime("%H:%M:%S"))
-
-
-# This class is for cache instance
-class CacheInstance():
-    def __init__(self, cache_id, cache_disk):
-        self.cacheID = cache_id
-        self.cacheDisk = cache_disk
-    
-    def __eq__(self, other):
-        return (self.cacheID == other.cacheID)
-
-    def __hash__(self):
-        return hash(self.cacheID)
-
-    def __str__(self):
-        return "{0}, {1}".format(self.cacheID, self.cacheDisk)
-
-# This class is for cache volume which is cache-core pair
-class CacheVolume():
-    def __init__(self, cache_id, core_id, core_disk, cas_disk):
-        self.cacheID = cache_id
-        self.coreID = core_id
-        self.coreDisk = core_disk
-        self.casDisk = cas_disk
-    
-    def __eq__(self, other):
-        return (self.cacheID == other.cacheID and self.coreID == other.coreID)
-
-    def __hash__(self):
-        return hash((self.cacheID, self.coreID))
-
-    def __str__(self):
-        return "{0}, {1}, {2}, {3}".format(self.cacheID, self.coreID, self.coreDisk, self.casDisk)
-
-# This class is used to fetch the running list of cache and core        
-class SetOfCacheVolume:
-    set_cache_volume = set()
-    set_cache_instance = set()
-    refresh_lock = threading.Lock()
-
-    def __init__(self):
-        return 0
-
-    # /dev/intelcasn-m means device for cache n and core m
-    @classmethod
-    def getCacheCoreIdByDevName(cls, device_name):
-        m = re.match(r"/dev/intelcas(?P<cache_id>\d+)-(?P<core_id>\d+)(\n)*", device_name)
-        if (m):
-            return (int(m.group('cache_id')), int(m.group('core_id')))
-        else:
-            print "Not found match"
-            return (-1, -1)
-    
-    @classmethod
-    def insertCacheInstance(cls, fields):
-        #cls.list_cache_instance.append(CacheInstance(fields[1], fields[2]))
-        cls.set_cache_instance.add(CacheInstance(fields[1], fields[2]))
-        return 0
-    
-    @classmethod
-    def insertCacheVolume(cls, fields):
-        (cache_id, core_id) = cls.getCacheCoreIdByDevName(fields[5])
-        if (-1 == cache_id or -1 == core_id):
-            return 0
-        else:
-            # print "Append {0} {1}".format(cache_id, core_id)
-            #cls.list_cache_volume.append(CacheVolume(cache_id, core_id, fields[2], fields[5]))
-            cls.set_cache_volume.add(CacheVolume(cache_id, core_id, fields[2], fields[5]))
-            return 0
-
-    # Dump one line into the file after parsing
-    @classmethod
-    def dumpRawInfo(cls, output_str, dumpDir):
-        dump_file = os.path.join(dumpDir, "casadmL_{0}.csv".format(MyTimeStamp.getAppendTime()))
-        outF = open(dump_file, "w")
-        outF.writelines(output_str)
-        outF.close()
-        return 0
-    
-    # Get raw information from casadm cmd
-    @classmethod
-    def getRawInfo(cls):
-        get_cache_core_list = 'casadm -L -o csv'
-        stats_output = subprocess.check_output(get_cache_core_list, shell=True)
-        # print stats_output
-        return stats_output
-
-    @classmethod
-    def parseRawInfo(cls, output_str):
-        lines = output_str.splitlines()
-        for line in lines:
-            words = line.split(',')
-            if ('cache' == words[0]):
-                cls.insertCacheInstance(words)
-            elif ('core' == words[0] and words[5].startswith('/dev/intelcas')):
-                cls.insertCacheVolume(words)
-            else:
-                pass
-        return 0
-
-    @classmethod
-    def fetchCacheVolumeSet(cls, dumpDir = ""):
-        cls.refresh_lock.acquire()
-        cls.set_cache_instance = set()
-        cls.set_cache_volume = set()
-        raw_output_str = cls.getRawInfo()
-        if dumpDir:
-            cls.dumpRawInfo(raw_output_str, dumpDir)
-        cls.parseRawInfo(raw_output_str)
-        cls.set_cache_volume = sorted(cls.set_cache_volume)
-        cls.set_cache_instance = sorted(cls.set_cache_instance)
-        cls.refresh_lock.release()
-        return (cls.set_cache_instance, cls.set_cache_volume)
-
-    @classmethod
-    def showCacheVolumeSet(cls):
-        print "We got those cache instances:"
-        for cache_instance in cls.set_cache_instance:
-            print cache_instance
-        print "We got those cache volumes:"
-        for cache_volume in cls.set_cache_volume:
-            print cache_volume
-        return 0    
-
 class CasPerfStats:
     def __init__(self, interval_seconds, cycle_num, dataDir, finish = threading.Event()):
         self.dump_header = True
@@ -248,7 +95,7 @@ class CasPerfStats:
         return 0
 
     def getCycleStats(self):
-        (cache_inst_list, cache_volume_list) = SetOfCacheVolume.fetchCacheVolumeSet()
+        (cache_inst_list, cache_volume_list) = casAdmin.fetchCacheVolumeSet()
         for cache_volume in cache_volume_list:
             if (INVALID_CACHE_ID == self.filterCacheID):
                 pass
@@ -257,7 +104,6 @@ class CasPerfStats:
             else:
                 continue
             
-            # print "Trying to get stats for {0} {1}".format(cache_volume.cacheID, cache_volume.coreID)
             raw_info = self.getRawStats(cache_volume.cacheID, cache_volume.coreID)
             self.resetPerfStat(cache_volume.cacheID, cache_volume.coreID)
             self.parseRawStats(raw_info, cache_volume.cacheID)
@@ -273,7 +119,7 @@ class IoStats:
         self.finish = finish
         self.dataDir    = dataDir
 
-    def startCollectStats(self, cacheID = INVALID_CACHE_ID):
+    def startCollectStats(self, cacheDev = "", coreDev = "", cacheID = INVALID_CACHE_ID):
         cycles = self.cycles
         interval = self.interval
 
@@ -281,16 +127,17 @@ class IoStats:
         time_seconds_now = datetime.datetime.now().time().second
         seconds_to_wait = (interval - (time_seconds_now % interval))
         time.sleep(seconds_to_wait)
-
-        if (INVALID_CACHE_ID == cacheID):
-            self.runIoStatToEnd(self.getAllDev())
-        else:
+    
+        if (cacheDev and coreDev): # Specify cache,core pair
+            self.runIoStatToEnd(self.getDevCacheCorePair(cacheDev, coreDev))
+        elif (INVALID_CACHE_ID != cacheID): # Specify cache ID
             self.runIoStatToEnd(self.getDevListByCacheId(cacheID))
-
+        else: # Default
+            self.runIoStatToEnd(self.getAllDev())
         return 0
     
     def getAllDev(self):
-        (cache_instance_list, cache_volume_list) = SetOfCacheVolume.fetchCacheVolumeSet()
+        (cache_instance_list, cache_volume_list) = casAdmin.fetchCacheVolumeSet()
         dev_list = ""
 
         for cache_volume in cache_volume_list:
@@ -302,7 +149,7 @@ class IoStats:
         return dev_list
     
     def getDevListByCacheId(self, cache_id):
-        (cache_instance_list, cache_volume_list) = SetOfCacheVolume.fetchCacheVolumeSet()
+        (cache_instance_list, cache_volume_list) = casAdmin.fetchCacheVolumeSet()
         dev_list = ""
 
         for cache_volume in cache_volume_list:
@@ -315,6 +162,17 @@ class IoStats:
                 dev_list = "{0} {1}".format(dev_list, cache_instance.cacheDisk)
         
         return dev_list
+    
+    # Return dev list for (cache, core) pair and its intelcasx-x
+    # Will wait until the cache instance configured for cache/core pair
+    def getDevCacheCorePair(self, cacheDev, coreDev):
+        while (True):
+            casDisk = casAdmin.getIntelDiskByCoreDev(coreDev)
+            if (casDisk):
+                return "{0} {1} {2}".format(cacheDev, coreDev, casDisk)
+            else:
+                logger.info("**WARNING** CAS not configured on {0}, sleep and wait".format(coreDev))
+                time.sleep(1)
         
     def getDumpFilePath(self):
         return os.path.join(self.dataDir, "IOStat_{0}.csv".format(self.timeStarted))

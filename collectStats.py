@@ -5,6 +5,7 @@ import argparse
 import shlex
 
 from statsHelper import *
+from loggerHelper import *
 
 '''
 Used to calculate the cycle values for some columns
@@ -35,10 +36,9 @@ if __name__ == "__main__":
     RUNNINGT_TIME = args.T
     WORKING_DIR = args.O
 
-    print "\nAm going to collect CAS Perf Stats every {0} seconds;".format(CYCLE_TIME)
-    print "Will keep running {0} seconds;".format(RUNNINGT_TIME) 
-    print "Generated data would be in {0}.\n".format(WORKING_DIR)
-   
+    logger.info("Starting Collect Stats, one cycle {0} seconds, run {1} seconds, save to {2}".
+                format(CYCLE_TIME, RUNNINGT_TIME, WORKING_DIR))
+    
     SetOfCacheVolume.fetchCacheVolumeSet()
     SetOfCacheVolume.showCacheVolumeSet()
 
