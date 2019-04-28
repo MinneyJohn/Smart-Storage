@@ -1,5 +1,5 @@
 # Smart-Storage
-### Baseline performance validation against one cache/core pair using CAS
+## Baseline performance validation against one cache/core pair using CAS
 The tool *casBaseLine.py* can be used to trigger one baseline performance validation against one cache/core pair.
 Example Usage
 ```
