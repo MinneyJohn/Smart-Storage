@@ -45,7 +45,8 @@ if __name__ == "__main__":
     coreDev = args.core
     output  = args.output
 
-    # Setup logfile
+    # Setup logfile and dataDir
+    logMgr.setDataDir(output)
     logFileName = os.path.join(output, time.strftime("smart-storage-%Y-%m-%d-%Hh-%Mm.log"))
     logMgr.setUp(logFileName)
     logMgr.info("\n\n")
@@ -70,29 +71,21 @@ Just One Minute, Am estimating the running time................""".format(cacheD
     # casAdmin.showCacheVolumeSet()
 
     # Prepare Stats Collecting Threads
-    #casPerfStatsObj = CasPerfStats(DEFAULT_CYCLE_TIME, int(RUNNING_TO_END/DEFAULT_CYCLE_TIME), fioFinishEvent)
-    #ioStatsObj = IoStats(DEFAULT_CYCLE_TIME, int(RUNNING_TO_END/DEFAULT_CYCLE_TIME), fioFinishEvent)
     casPerfStatsObj = CasPerfStats(DEFAULT_CYCLE_TIME, int(RUNNING_TO_END/DEFAULT_CYCLE_TIME), output, fioFinishEvent)
-    ioStatsObj = IoStats(DEFAULT_CYCLE_TIME, int(RUNNING_TO_END/DEFAULT_CYCLE_TIME), output, fioFinishEvent)
-
+    
     # Prepare FIO test case
     testCase = baselineCacheCorePair(cacheDev, coreDev, fioFinishEvent)
     
     # Generate working threads
     thread_collect_cas    = threading.Thread(target=casPerfStatsObj.startCollectStats)
-    thread_collect_iostat = threading.Thread(target=ioStatsObj.startCollectStats,
-                                             kwargs={"cacheDev": cacheDev, 
-                                                     "coreDev": coreDev}) 
     thread_run_fio_jobs   = threading.Thread(target=testCase.do)
     
     # Start the threads
     thread_collect_cas.start() 
-    thread_collect_iostat.start()
     thread_run_fio_jobs.start()
 
     # Wait for the thread
     thread_collect_cas.join() 
-    thread_collect_iostat.join()
     thread_run_fio_jobs.join()
 
     logMgr.info("Exit Point of CAS baseline Test\n\n\n")

@@ -11,6 +11,7 @@ import argparse
 
 from adminHelper import *
 from loggerHelper import *
+from statsHelper import *
 
 '''
 Why setting it to be 1 now:
@@ -96,14 +97,40 @@ class jobFIO():
 
     def execute(self):
         # FOR DEBUG to run VERY fast
-        # self.setParm("runtime", 10)
-        # self.setParm("time_based")
+        self.setParm("runtime", 120)
+        self.setParm("time_based")
         
         fio_cmd = "fio {0}".format(self.genParmStr())
         logMgr.info(fio_cmd)
+        # Get thread for IOStats
+        (ret, ioStatThread) = self.getIOStatsThread()
+        # Start thread for IOStats
+        if (0 == ret):
+            ioStatThread.start()
+        # Start FIO Job
         casAdmin.getOutPutOfCmd(fio_cmd)
+        # Wait for IOStats to finish
+        if (0 == ret):
+            ioStatThread.join()
         return 0
         
+    def getIOStatsThread(self):
+        if self.parmDict.has_key("runtime") and self.parmDict.has_key("filename"):
+            runTime = self.parmDict["runtime"]
+            fileName = self.parmDict["filename"]
+        else:
+            return (1, "")
+
+        (cacheID, coreID) = casAdmin.getCacheCoreIdByDevName(fileName)
+        if (-1 == cacheID):
+            return (1, "")
+
+        ioStatsJob = IoStats(DEFAULT_CYCLE_TIME, 
+                            int(runTime/DEFAULT_CYCLE_TIME) + 2, 
+                            logMgr.getDataDir())
+        thread_collect_iostat = threading.Thread(target=ioStatsJob.startCollectStats,
+                                                        kwargs={"cacheID": cacheID})                                    
+        return (0, thread_collect_iostat)
 
 class jobRandWrite(jobFIO):        
     def run(self, devName, size, runTime = 0):

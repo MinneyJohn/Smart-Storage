@@ -6,6 +6,7 @@ import logging
 class logMgr():
     logName = ""
     logFile = ""
+    dataDir = ""
 
     @classmethod
     def setUp(cls, logFile):
@@ -28,3 +29,13 @@ class logMgr():
         if ("" == cls.logName):
             cls.defaultSetUp()
         logging.getLogger(cls.logName).info(msg)
+    
+    @classmethod
+    def setDataDir(cls, dataDir):
+        cls.dataDir = dataDir
+    
+    @classmethod
+    def getDataDir(cls):
+        if ("" == cls.dataDir):
+            cls.setDataDir("/tmp")
+        return cls.dataDir

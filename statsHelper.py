@@ -113,6 +113,7 @@ class CasPerfStats:
 class IoStats:
     def __init__(self, interval_seconds, cycle_num, dataDir, finish = threading.Event()):
         self.dump_header = True
+        self.skip_Cycle = True
         self.timeStarted = MyTimeStamp.getAppendTime()
         self.interval = interval_seconds
         self.cycles = cycle_num
@@ -150,18 +151,23 @@ class IoStats:
     
     def getDevListByCacheId(self, cache_id):
         (cache_instance_list, cache_volume_list) = casAdmin.fetchCacheVolumeSet()
-        dev_list = ""
+        coreDisk = ""
+        casDisk = ""
+        cacheDisk = ""
 
         for cache_volume in cache_volume_list:
             if cache_id == cache_volume.cacheID:
-                dev_list = "{0} {1}".format(dev_list, cache_volume.coreDisk)
-                dev_list = "{0} {1}".format(dev_list, cache_volume.casDisk)
+                coreDisk = cache_volume.coreDisk
+                casDisk  = cache_volume.casDisk
+                print "Found {0} {1}".format(coreDisk, casDisk)
         
         for cache_instance in cache_instance_list:
+            print "cache_id {0}, cache_instance.cacheID {1}".format(cache_id, cache_instance.cacheID)
             if cache_id == cache_instance.cacheID:
-                dev_list = "{0} {1}".format(dev_list, cache_instance.cacheDisk)
+                cacheDisk = cache_instance.cacheDisk
+                print "Found {0}".format(cacheDisk)
         
-        return dev_list
+        return "{0} {1} {2}".format(coreDisk, casDisk, cacheDisk)
     
     # Return dev list for (cache, core) pair and its intelcasx-x
     # Will wait until the cache instance configured for cache/core pair
@@ -193,11 +199,22 @@ class IoStats:
         self.dump_header = False
         return 0
 
+    # Always pass the 1st cycle data as it NOT average by iostat design
     def parseOneLine(self, line, dev_list):
+        # First Cycle
         if (True == self.dump_header and line.startswith('Device:')):
             header = line.replace('Device:', 'Device')
             header = re.sub("\s+", ",", header)
             self.dumpHeaderLine(header)
+            return 0
+        # Hit beginning of second cylce, not skip anymore
+        elif (True == self.skip_Cycle and line.startswith('Device:')):
+            self.skip_Cycle = False
+            return 0
+        # Still not hitting second cycle, skip
+        elif (True == self.skip_Cycle):
+            # DEBUG
+            logMgr.info("Skip {0}".format(line))
             return 0
         
         words = line.split()
@@ -226,5 +243,5 @@ class IoStats:
                 line = line.strip()
                 self.parseOneLine(line, dev_list)
         rc = process.poll()
-        logMgr.info("Got FIO finish notification, Exit IO Stats Collection")
+        logMgr.info("Time Up, Exit IO Stats Collection")
         return rc

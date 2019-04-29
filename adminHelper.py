@@ -156,7 +156,6 @@ class casAdmin():
                 return cache_instance.cacheID
         return INVALID_CACHE_ID
 
-    
     @classmethod
     def getIntelDiskByCoreDev(cls, coreDev):
         (cache_instance_list, cache_volume_list) = cls.fetchCacheVolumeSet()
@@ -219,7 +218,7 @@ class casAdmin():
     @classmethod
     def insertCacheInstance(cls, fields):
         #cls.list_cache_instance.append(CacheInstance(fields[1], fields[2]))
-        cls.set_cache_instance.add(CacheInstance(fields[1], fields[2]))
+        cls.set_cache_instance.add(CacheInstance(int(fields[1]), fields[2]))
         return 0
     
     @classmethod
