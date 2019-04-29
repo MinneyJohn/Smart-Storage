@@ -12,6 +12,11 @@ import argparse
 from adminHelper import *
 from loggerHelper import *
 
+MAKE_FILL_SAFE_AMPLIFICATION = 1.3
+RUNTIME_READ_MISS   = 700
+RUNTIME_MIN_PER_CAS = 700
+RUNNING_TO_END = 36000
+
 '''
 The customer wants to see those information for one caching software
 << Write Back Mode >>
@@ -45,6 +50,7 @@ Case 4.2, compared with RAW cache device performance number
 '''
 
 class jobFIO():
+    minT = RUNTIME_MIN_PER_CAS
     def __init__(self):
         self.parmDict = {}
         self.defaultParms()
@@ -72,62 +78,54 @@ class jobFIO():
                 parmStr = "{0} --{1}".format(parmStr, k)
         return parmStr
 
+    def runTimeControl(self, runTime):
+        if (0 < runTime):
+            if (int(runTime) < self.minT):
+                runTime = self.minT
+            self.setParm("runtime", runTime)
+            self.setParm("time_based")
+
     def execute(self):
-        # FOR DEBUG 
+        # FOR DEBUG to run VERY fast
         # self.setParm("runtime", 10)
         # self.setParm("time_based")
         
         fio_cmd = "fio {0}".format(self.genParmStr())
-        logger.info(fio_cmd)
+        logMgr.info(fio_cmd)
         casAdmin.getOutPutOfCmd(fio_cmd)
         return 0
         
 
 class jobRandWrite(jobFIO):        
-    def run(self, devName, size, runTime = ""):
+    def run(self, devName, size, runTime = 0):
         self.setParm("filename", devName)
         self.setParm("size", size)
         self.setParm("rw", "randwrite")
         self.setParm("bs", "4K")
 
-        if runTime:
-            self.setParm("runtime", runTime)
-            self.setParm("time_based")
-        else:    
-            self.setParm("runtime", RUNNING_TO_END)
+        self.runTimeControl(runTime)
         
         self.execute()
         return 0
 
         
 class jobRandRead(jobFIO):
-    def run(self, devName, size, runTime = ""):
+    def run(self, devName, size, runTime = 0):
         self.setParm("filename", devName)
         self.setParm("size", size)
         self.setParm("rw", "randread")
         self.setParm("bs", "4K")
-
-        if runTime:
-            self.setParm("runtime", runTime)
-            self.setParm("time_based")
-        else:    
-            self.setParm("runtime", RUNNING_TO_END)
-
+        self.runTimeControl(runTime)
         self.execute()
         return 0
     
 class jobSeqWrite(jobFIO):
-    def run(self, devName, size, runTime = ""):
+    def run(self, devName, size, runTime = 0):
         self.setParm("filename", devName)
         self.setParm("size", size)
         self.setParm("rw", "write")
         self.setParm("bs", "128K")
-
-        if runTime:
-            self.setParm("runtime", runTime)
-            self.setParm("time_based")
-        else:    
-            self.setParm("runtime", RUNNING_TO_END)
+        self.runTimeControl(runTime)
         self.execute()
         return 0
 
@@ -137,12 +135,17 @@ class jobSeqRead(jobFIO):
         self.setParm("size", size)
         self.setParm("rw", "read")
         self.setParm("bs", "128K")
+        self.runTimeControl(runTime)
+        self.execute()
+        return 0
 
-        if runTime:
-            self.setParm("runtime", runTime)
-            self.setParm("time_based")
-        else:    
-            self.setParm("runtime", RUNNING_TO_END)
+class jobTestRandWrSpeed(jobFIO):
+    def run(self, devName, size):
+        self.setParm("filename", devName)
+        self.setParm("size", size)
+        self.setParm("rw", "randwrite")
+        self.setParm("bs", "4K")
+        self.setParm("runtime", 60)
         self.execute()
         return 0
 
@@ -169,7 +172,24 @@ class baselineCacheCorePair():
         self.cacheDev = cacheDev
         self.coreDev = coreDev
         self.finish = finish
-        
+    
+    def getSpeedRandWrMissInMib(self, cacheID, inteldisk, cacheSize):
+        logMgr.info("Start of write speed check")
+        jobTestRandWrSpeed().run(inteldisk, "{0}G".format(cacheSize))
+        logMgr.info("Ending of write speed check")
+        dirtyBlocks = int(casAdmin.getFieldCachePerf(cacheID, "Dirty [4KiB blocks]"))
+        return int((dirtyBlocks * 4)/1024)
+    
+    def getTimeFillCacheWithWrite(self, cacheID, inteldisk, cacheSize):
+        writeSpeedInMb = self.getSpeedRandWrMissInMib(cacheID, inteldisk, cacheSize)
+        logMgr.info("1st Minute, Write Speed {0} Mib/s".format(writeSpeedInMb))
+        return int((cacheSize * 1024 * MAKE_FILL_SAFE_AMPLIFICATION)/writeSpeedInMb) 
+    
+    def estimateTotalRunningTime(self, timeToFill):
+        if (timeToFill < RUNTIME_MIN_PER_CAS):
+            timeToFill = RUNTIME_MIN_PER_CAS
+        return int((timeToFill * 6 + RUNTIME_READ_MISS * 3) / 60)
+
     def do(self):
         # Make sure cache/core is clear
         if False == casAdmin.isCacheCoreClear(self.cacheDev, self.coreDev):
@@ -181,67 +201,79 @@ class baselineCacheCorePair():
         
         # Get inteldisk associated with cache/core pair
         inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-        cachesize = casAdmin.getCacheSize(self.cacheDev)
+        cachesize = casAdmin.getCacheSizeInGib(self.cacheDev)
+        cacheID = casAdmin.getIdByCacheDev(self.cacheDev)
+        timeToFill = self.getTimeFillCacheWithWrite(cacheID, inteldisk, cachesize)
+        totalRunTime = self.estimateTotalRunningTime(timeToFill)
+        runTimeStr = "Estimated Running Time {0} minutes".format(totalRunTime)
+        logMgr.info(runTimeStr)
+        print runTimeStr
+        
+        # Reconfig
+        casAdmin.reCfgCacheCorePair(self.cacheDev, self.coreDev)
+        # Get inteldisk associated with cache/core pair
+        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+        cachesize = casAdmin.getCacheSizeInGib(self.cacheDev)
 
         # Do Random Write (Miss)
-        logger.info("Start of random write miss")
-        jobRandWrite().run(inteldisk, cachesize)
-        logger.info("Ending of random write miss")
+        logMgr.info("Start of random write miss")
+        jobRandWrite().run(inteldisk, "{0}G".format(cachesize), timeToFill)
+        logMgr.info("Ending of random write miss")
 
         # Do Random Write (Hit)
-        logger.info("Start of random write hit")
-        jobRandWrite().run(inteldisk, cachesize)
-        logger.info("Ending of random write hit")
+        logMgr.info("Start of random write hit")
+        jobRandWrite().run(inteldisk, "{0}G".format(cachesize), timeToFill)
+        logMgr.info("Ending of random write hit")
 
         # Do Random Read (Hit)
-        logger.info("Start of random read hit")
-        jobRandRead().run(inteldisk, cachesize)
-        logger.info("Ending of random read hit")
+        logMgr.info("Start of random read hit")
+        jobRandRead().run(inteldisk, "{0}G".format(cachesize), timeToFill)
+        logMgr.info("Ending of random read hit")
 
         # Reconfig
         casAdmin.reCfgCacheCorePair(self.cacheDev, self.coreDev)
 
         # Get inteldisk associated with cache/core pair
         inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-        cachesize = casAdmin.getCacheSize(self.cacheDev)
+        cachesize = casAdmin.getCacheSizeInGib(self.cacheDev)
 
         # Do Seq Write (Miss)
-        logger.info("Start of sequential write miss")
-        jobSeqWrite().run(inteldisk, cachesize)
-        logger.info("Ending of sequential write miss")
+        logMgr.info("Start of sequential write miss")
+        jobSeqWrite().run(inteldisk, "{0}G".format(cachesize), timeToFill)
+        logMgr.info("Ending of sequential write miss")
 
         # Do Seq Write (Hit)
-        logger.info("Start of sequential write hit")
-        jobSeqWrite().run(inteldisk, cachesize)
-        logger.info("Ending of sequential write hit")
+        logMgr.info("Start of sequential write hit")
+        jobSeqWrite().run(inteldisk, "{0}G".format(cachesize), timeToFill)
+        logMgr.info("Ending of sequential write hit")
 
         # Do Seq Read (Hit)
-        logger.info("Start of sequential read hit")
-        jobSeqRead().run(inteldisk, cachesize)
-        logger.info("Ending of sequential read hit")
+        logMgr.info("Start of sequential read hit")
+        jobSeqRead().run(inteldisk, "{0}G".format(cachesize), timeToFill)
+        logMgr.info("Ending of sequential read hit")
 
         # Reconfig
         casAdmin.reCfgCacheCorePair(self.cacheDev, self.coreDev)
 
         # Get inteldisk associated with cache/core pair
         inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-        coreSize = casAdmin.getCoreSize(self.coreDev)
+        coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
         # Do Random Read (Miss), set running to 600s as it is quite a long run
-        logger.info("Start of random read miss")
-        jobRandRead().run(inteldisk, coreSize, runTime="600")
-        logger.info("Ending of random read miss")
+        logMgr.info("Start of random read miss")
+        jobRandRead().run(inteldisk, "{0}G".format(coreSize), RUNTIME_READ_MISS)
+        logMgr.info("Ending of random read miss")
 
         # Reconfig
         casAdmin.reCfgCacheCorePair(self.cacheDev, self.coreDev)
 
         # Get inteldisk associated with cache/core pair
         inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-        coreSize = casAdmin.getCoreSize(self.coreDev)
+        coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
         # Do Seq Read (Miss), set running to 600s as it is quite a long run
-        logger.info("Start of seq read miss")
-        jobSeqRead().run(inteldisk, coreSize, runTime="600")
-        logger.info("Ending of seq read miss")
+        logMgr.info("Start of seq read miss")
+        jobSeqRead().run(inteldisk, "{0}G".format(coreSize), RUNTIME_READ_MISS)
+        logMgr.info("Ending of seq read miss")
 
         self.finish.set()
-        logger.info("Ready to notify the finish of FIO tasks")
+        logMgr.info("Ready to notify the finish of FIO tasks")
         return 0

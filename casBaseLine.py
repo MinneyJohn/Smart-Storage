@@ -24,7 +24,7 @@ def verifyArgs(args):
         exit(1)    
     elif (True == casAdmin.hasPartionOnDev(args.cache) 
         or True == casAdmin.hasPartionOnDev(args.core)):
-        print "**SORRY** Please make sure {0} and {1} does NOT have partition\n".format(args.cache, args.core)
+        print "**SORRY** Please make sure {0} and {1} does NOT have partition or CAS configuration\n".format(args.cache, args.core)
         exit(1)
     elif False == casAdmin.isCacheCoreClear(args.cache, args.core):
         print "**SORRY** Please make sure {0} and {1} NOT being used\n".format(args.cache, args.core)
@@ -37,22 +37,37 @@ if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser()
     setupArgsParser()
     args = arg_parser.parse_args()
+
+    # Do Arguments Check
     verifyArgs(args)
 
     cacheDev = args.cache
     coreDev = args.core
     output  = args.output
 
-    logger.info("\n\n")
-    logger.info("Entry Point to start CAS baseline test")
-    logger.info("Caching Device is {0}, Core Device is {1}".format(cacheDev, coreDev))
+    # Setup logfile
+    logFileName = os.path.join(output, time.strftime("smart-storage-%Y-%m-%d-%Hh-%Mm.log"))
+    logMgr.setUp(logFileName)
+    logMgr.info("\n\n")
+
+    # Print notice msg for the user
+    notice_msg = """\nStart doing baseline CAS test using cache {0} and core {1}
+The performance CSV files are in {2}
+Running log is {3}
+Please do NOT do CAS configuration during this test progress
+Just One Minute, Am estimating the running time................""".format(cacheDev, coreDev, output, logFileName)
+
+    print notice_msg
+
+    logMgr.info("Entry Point to start CAS baseline test")
+    logMgr.info("Caching Device is {0}, Core Device is {1}".format(cacheDev, coreDev))
     
     # Used this event to notify stats collection to quit
     fioFinishEvent = threading.Event()
 
     # Check existing caches
     casAdmin.refreshCacheVolumeSet()
-    casAdmin.showCacheVolumeSet()
+    # casAdmin.showCacheVolumeSet()
 
     # Prepare Stats Collecting Threads
     #casPerfStatsObj = CasPerfStats(DEFAULT_CYCLE_TIME, int(RUNNING_TO_END/DEFAULT_CYCLE_TIME), fioFinishEvent)
@@ -80,5 +95,5 @@ if __name__ == "__main__":
     thread_collect_iostat.join()
     thread_run_fio_jobs.join()
 
-    logger.info("Exit Point of CAS baseline Test\n\n\n")
+    logMgr.info("Exit Point of CAS baseline Test\n\n\n")
     exit(0)

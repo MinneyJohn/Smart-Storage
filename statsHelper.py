@@ -37,7 +37,7 @@ class CasPerfStats:
         self.filterCacheID = cacheID
         while (cycles):
             if (self.finish.isSet()):
-                logger.info("Got FIO finish notification, Exit CAS Stats Collection")
+                logMgr.info("Got FIO finish notification, Exit CAS Stats Collection")
                 return 0
             time_seconds_now = datetime.datetime.now().time().second
             seconds_to_wait = (self.interval - (time_seconds_now % self.interval))
@@ -46,7 +46,7 @@ class CasPerfStats:
             cycle_run.start()
             cycle_run.join()
             cycles -= 1
-        logger.info("Exit CAS Stats Collection")
+        logMgr.info("Exit CAS Stats Collection")
         return 0
 
     def getDumpFilePath(self):
@@ -171,7 +171,7 @@ class IoStats:
             if (casDisk):
                 return "{0} {1} {2}".format(cacheDev, coreDev, casDisk)
             else:
-                logger.info("**WARNING** CAS not configured on {0}, sleep and wait".format(coreDev))
+                logMgr.info("**WARNING** CAS not configured on {0}, sleep and wait".format(coreDev))
                 time.sleep(1)
         
     def getDumpFilePath(self):
@@ -211,12 +211,12 @@ class IoStats:
     def runIoStatToEnd(self, dev_list):
         iostat_cmd = 'iostat -xmtd {0} {1} {2}'.format(dev_list, self.interval, self.cycles)
 
-        print iostat_cmd
+        logMgr.info(iostat_cmd)
 
         process = subprocess.Popen(shlex.split(iostat_cmd), stdout=subprocess.PIPE)
         while True:
             if self.finish.isSet():
-                logger.info("Got FIO finish notification, Exit IO Stats Collection")
+                logMgr.info("Got FIO finish notification, Exit IO Stats Collection")
                 return 0
             
             line = process.stdout.readline()
@@ -226,5 +226,5 @@ class IoStats:
                 line = line.strip()
                 self.parseOneLine(line, dev_list)
         rc = process.poll()
-        logger.info("Got FIO finish notification, Exit IO Stats Collection")
+        logMgr.info("Got FIO finish notification, Exit IO Stats Collection")
         return rc

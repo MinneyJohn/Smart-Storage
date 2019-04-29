@@ -3,8 +3,28 @@
 import time
 import logging
 
-logging.basicConfig(level=logging.DEBUG,
-                    filename= time.strftime("smart-storage-%Y-%m-%d.log"),
-                    datefmt='%Y/%m/%d %H:%M:%S',
-                    format='%(asctime)s - %(levelname)s - %(lineno)d - %(module)s - %(message)s')
-logger = logging.getLogger(__name__)
+class logMgr():
+    logName = ""
+    logFile = ""
+
+    @classmethod
+    def setUp(cls, logFile):
+        cls.logName = logFile
+        cls.logFile = logFile
+        log_setup   = logging.getLogger(cls.logName)
+        formatter   = logging.Formatter('%(asctime)s - %(lineno)d - %(module)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S')
+        fileHandler = logging.FileHandler(cls.logFile, mode='a')
+        fileHandler.setFormatter(formatter)
+        log_setup.setLevel(logging.DEBUG)
+        log_setup.addHandler(fileHandler)
+        
+    @classmethod
+    def defaultSetUp(cls):
+        cls.setUp("/tmp/casBaseLine.tmp")
+    
+    @classmethod
+    def info(cls, msg):
+        # If logging not set yet, do default setup
+        if ("" == cls.logName):
+            cls.defaultSetUp()
+        logging.getLogger(cls.logName).info(msg)

@@ -16,7 +16,6 @@ from loggerHelper import *
 SECOND = "SECOND"
 MINUTE = "MINUTE"
 INVALID_CACHE_ID = -100
-RUNNING_TO_END = 36000
 DEFAULT_CYCLE_TIME = 60
 
 class MyTimeStamp():
@@ -164,23 +163,23 @@ class casAdmin():
         return ""
         
     @classmethod
-    def getCoreSize(cls, coreDev):
+    def getCoreSizeInGib(cls, coreDev):
         coreDev_noPre = coreDev.replace("/dev/", "")
         cmd_str = "lsblk {0} -b -o NAME,SIZE|grep \"{1} \"".format(coreDev, coreDev_noPre)
         (ret, output) = cls.getOutPutOfCmd(cmd_str)
         words = cls.getWordsOfLine(output)
-        return "{0}G".format((int(words[1])/1024/1024/1024))
+        return (int(words[1])/1024/1024/1024)
 
     @classmethod
-    def getCacheSize(cls, cacheDev):
+    def getCacheSizeInGib(cls, cacheDev):
         cacheID = cls.getIdByCacheDev(cacheDev)
         cmd_str = "casadm -P -i {0}| grep \"Cache Size\"".format(cacheID)
         (ret, output) = cls.getOutPutOfCmd(cmd_str)
         if (0 == ret):
             words = cls.getWordsOfLine(output)
             if (6 < len(words)):
-                return "{0}G".format(int(float(words[6])))
-        return ""
+                return int(float(words[6]))
+        return 0
     
     @classmethod
     def getOutPutOfCmd(cls, commandStr):
@@ -188,12 +187,16 @@ class casAdmin():
             output = subprocess.check_output(commandStr, shell=True)
             return (0, output.strip(" ").rstrip(" \n"))
         except:
-            logger.info("**Exception** {0}".format(commandStr))
+            logMgr.info("**Exception** {0}".format(commandStr))
             return (1, "")
    
     @classmethod
-    def getWordsOfLine(cls, line):
-        words = re.split(",| ", line)
+    def getWordsOfLine(cls, line, delimiters = ""):
+        if delimiters:
+            words = re.split(delimiters, line)
+        else:
+            words = re.split(",| ", line)
+        
         valid_words = []
         for word in words:
             if word:
@@ -301,3 +304,22 @@ class casAdmin():
             return True
         else:
             return False
+    
+    @classmethod
+    def getFieldCachePerf(cls, cacheID, fieldName):
+        check_cmd = "casadm -P -i {0} -o csv".format(cacheID)
+        (ret, output) = cls.getOutPutOfCmd(check_cmd)
+        if (0 != ret):
+            return ""
+        lines = output.splitlines()
+        if (2 != len(lines)):
+            return ""
+        headerS = cls.getWordsOfLine(lines[0], ",")
+        dataS   = cls.getWordsOfLine(lines[1], ",")
+        index = 0
+        for head in headerS:
+            if (fieldName == head):
+                # print "Found Value {0} for field {1} at index {2}".format(dataS[index], fieldName, index)
+                return dataS[index]
+            index += 1
+        return ""
