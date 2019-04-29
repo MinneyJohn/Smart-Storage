@@ -154,7 +154,7 @@ class jobTestRandWrSpeed(jobFIO):
         self.setParm("size", size)
         self.setParm("rw", "randwrite")
         self.setParm("bs", "4K")
-        self.setParm("runtime", 60)
+        self.setParm("runtime", 120)
         self.execute()
         return 0
 
