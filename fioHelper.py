@@ -12,7 +12,16 @@ import argparse
 from adminHelper import *
 from loggerHelper import *
 
-MAKE_FILL_SAFE_AMPLIFICATION = 1.3
+'''
+Why setting it to be 1 now:
+a) Now only support single cache intance
+b) At first, we have metadata overhead (2X)
+c) Also due to write miss, write lock is bottleneck
+d) So when times goes, the max write speed is supposed to be at least 4 times
+e) So the total average write speed is 2X of the original speed
+'''
+MAKE_FILL_SAFE_AMPLIFICATION = 0.5
+
 RUNTIME_READ_MISS   = 700
 RUNTIME_MIN_PER_CAS = 700
 RUNNING_TO_END = 360000 # 100 hours, MAX Running Time
@@ -178,7 +187,7 @@ class baselineCacheCorePair():
         jobTestRandWrSpeed().run(inteldisk, "{0}G".format(cacheSize))
         logMgr.info("Ending of write speed check")
         dirtyBlocks = int(casAdmin.getFieldCachePerf(cacheID, "Dirty [4KiB blocks]"))
-        return int((dirtyBlocks * 4)/1024)
+        return int((dirtyBlocks * 4)/1024/60)
     
     def getTimeFillCacheWithWrite(self, cacheID, inteldisk, cacheSize):
         writeSpeedInMb = self.getSpeedRandWrMissInMib(cacheID, inteldisk, cacheSize)

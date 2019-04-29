@@ -114,8 +114,11 @@ class casAdmin():
 
     @classmethod
     def stopCacheInstance(cls, cacheID):
+        cls.refresh_lock.acquire()
         stop_cache = "casadm -T -i {0} -n".format(cacheID)
         (ret, output) = cls.getOutPutOfCmd(stop_cache)
+        cls.refreshCacheVolumeSet()
+        cls.refresh_lock.release()
         return ret
     
     @classmethod

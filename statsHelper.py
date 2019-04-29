@@ -171,8 +171,8 @@ class IoStats:
             if (casDisk):
                 return "{0} {1} {2}".format(cacheDev, coreDev, casDisk)
             else:
-                logMgr.info("**WARNING** CAS not configured on {0}, sleep and wait".format(coreDev))
-                time.sleep(1)
+                logMgr.info("**WARNING** CAS not configured on {0}, sleep 30s and wait".format(coreDev))
+                time.sleep(30)
         
     def getDumpFilePath(self):
         return os.path.join(self.dataDir, "IOStat_{0}.csv".format(self.timeStarted))
