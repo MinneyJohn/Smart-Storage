@@ -15,7 +15,7 @@ from loggerHelper import *
 MAKE_FILL_SAFE_AMPLIFICATION = 1.3
 RUNTIME_READ_MISS   = 700
 RUNTIME_MIN_PER_CAS = 700
-RUNNING_TO_END = 36000
+RUNNING_TO_END = 360000 # 100 hours, MAX Running Time
 
 '''
 The customer wants to see those information for one caching software
