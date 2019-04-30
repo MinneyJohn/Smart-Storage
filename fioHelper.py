@@ -97,8 +97,8 @@ class jobFIO():
 
     def execute(self):
         # FOR DEBUG to run VERY fast
-        self.setParm("runtime", 120)
-        self.setParm("time_based")
+        # self.setParm("runtime", 120)
+        # self.setParm("time_based")
         
         fio_cmd = "fio {0}".format(self.genParmStr())
         logMgr.info(fio_cmd)
@@ -125,15 +125,24 @@ class jobFIO():
         if (-1 == cacheID):
             return (1, "")
 
-        ioStatsJob = IoStats(DEFAULT_CYCLE_TIME, 
-                            int(runTime/DEFAULT_CYCLE_TIME) + 2, 
-                            logMgr.getDataDir())
+        if self.parmDict.has_key("name"):
+            testName = self.parmDict["name"]
+            ioStatsJob = IoStats(DEFAULT_CYCLE_TIME, 
+                                int(runTime/DEFAULT_CYCLE_TIME) + 2, 
+                                logMgr.getDataDir(),
+                                testName)
+        else:
+            ioStatsJob = IoStats(DEFAULT_CYCLE_TIME, 
+                                int(runTime/DEFAULT_CYCLE_TIME) + 2, 
+                                logMgr.getDataDir())
+
         thread_collect_iostat = threading.Thread(target=ioStatsJob.startCollectStats,
                                                         kwargs={"cacheID": cacheID})                                    
         return (0, thread_collect_iostat)
 
 class jobRandWrite(jobFIO):        
-    def run(self, devName, size, runTime = 0):
+    def run(self, devName, size, testName, runTime = 0):
+        self.setParm("name", testName)
         self.setParm("filename", devName)
         self.setParm("size", size)
         self.setParm("rw", "randwrite")
@@ -146,7 +155,8 @@ class jobRandWrite(jobFIO):
 
         
 class jobRandRead(jobFIO):
-    def run(self, devName, size, runTime = 0):
+    def run(self, devName, size, testName, runTime = 0):
+        self.setParm("name", testName)
         self.setParm("filename", devName)
         self.setParm("size", size)
         self.setParm("rw", "randread")
@@ -156,7 +166,8 @@ class jobRandRead(jobFIO):
         return 0
     
 class jobSeqWrite(jobFIO):
-    def run(self, devName, size, runTime = 0):
+    def run(self, devName, size, testName, runTime = 0):
+        self.setParm("name", testName)
         self.setParm("filename", devName)
         self.setParm("size", size)
         self.setParm("rw", "write")
@@ -166,7 +177,8 @@ class jobSeqWrite(jobFIO):
         return 0
 
 class jobSeqRead(jobFIO):
-    def run(self, devName, size, runTime = ""):
+    def run(self, devName, size, testName, runTime = ""):
+        self.setParm("name", testName)
         self.setParm("filename", devName)
         self.setParm("size", size)
         self.setParm("rw", "read")
@@ -176,12 +188,13 @@ class jobSeqRead(jobFIO):
         return 0
 
 class jobTestRandWrSpeed(jobFIO):
-    def run(self, devName, size):
+    def run(self, devName, size, testName, runTime):
+        self.setParm("name", testName)
         self.setParm("filename", devName)
         self.setParm("size", size)
         self.setParm("rw", "randwrite")
         self.setParm("bs", "4K")
-        self.setParm("runtime", 120)
+        self.setParm("runtime", runTime)
         self.execute()
         return 0
 
@@ -210,11 +223,15 @@ class baselineCacheCorePair():
         self.finish = finish
     
     def getSpeedRandWrMissInMib(self, cacheID, inteldisk, cacheSize):
-        logMgr.info("Start of write speed check")
-        jobTestRandWrSpeed().run(inteldisk, "{0}G".format(cacheSize))
+        testRunTime = 120
+        logMgr.info("Start of write speed check, keep {0} seconds".format(testRunTime))
+        jobTestRandWrSpeed().run(inteldisk, 
+                                "{0}G".format(cacheSize), 
+                                "WriteSpeedCheck",
+                                testRunTime)
         logMgr.info("Ending of write speed check")
         dirtyBlocks = int(casAdmin.getFieldCachePerf(cacheID, "Dirty [4KiB blocks]"))
-        return int((dirtyBlocks * 4)/1024/60)
+        return int((dirtyBlocks * 4)/1024/testRunTime)
     
     def getTimeFillCacheWithWrite(self, cacheID, inteldisk, cacheSize):
         writeSpeedInMb = self.getSpeedRandWrMissInMib(cacheID, inteldisk, cacheSize)
@@ -253,17 +270,26 @@ class baselineCacheCorePair():
 
         # Do Random Write (Miss)
         logMgr.info("Start of random write miss")
-        jobRandWrite().run(inteldisk, "{0}G".format(cachesize), timeToFill)
+        jobRandWrite().run(inteldisk, 
+                            "{0}G".format(cachesize), 
+                            "RandWriteMiss",
+                            timeToFill)
         logMgr.info("Ending of random write miss")
 
         # Do Random Write (Hit)
         logMgr.info("Start of random write hit")
-        jobRandWrite().run(inteldisk, "{0}G".format(cachesize), timeToFill)
+        jobRandWrite().run(inteldisk, 
+                            "{0}G".format(cachesize), 
+                            "RandWriteHit",
+                            timeToFill)
         logMgr.info("Ending of random write hit")
 
         # Do Random Read (Hit)
         logMgr.info("Start of random read hit")
-        jobRandRead().run(inteldisk, "{0}G".format(cachesize), timeToFill)
+        jobRandRead().run(inteldisk, 
+                            "{0}G".format(cachesize), 
+                            "RandReadHit",
+                            timeToFill)
         logMgr.info("Ending of random read hit")
 
         # Reconfig
@@ -275,17 +301,26 @@ class baselineCacheCorePair():
 
         # Do Seq Write (Miss)
         logMgr.info("Start of sequential write miss")
-        jobSeqWrite().run(inteldisk, "{0}G".format(cachesize), timeToFill)
+        jobSeqWrite().run(inteldisk, 
+                            "{0}G".format(cachesize), 
+                            "SeqWriteMiss",
+                            timeToFill)
         logMgr.info("Ending of sequential write miss")
 
         # Do Seq Write (Hit)
         logMgr.info("Start of sequential write hit")
-        jobSeqWrite().run(inteldisk, "{0}G".format(cachesize), timeToFill)
+        jobSeqWrite().run(inteldisk, 
+                            "{0}G".format(cachesize), 
+                            "SeqWriteHit",
+                            timeToFill)
         logMgr.info("Ending of sequential write hit")
 
         # Do Seq Read (Hit)
         logMgr.info("Start of sequential read hit")
-        jobSeqRead().run(inteldisk, "{0}G".format(cachesize), timeToFill)
+        jobSeqRead().run(inteldisk, 
+                            "{0}G".format(cachesize), 
+                            "SeqReadHit",
+                            timeToFill)
         logMgr.info("Ending of sequential read hit")
 
         # Reconfig
@@ -296,7 +331,10 @@ class baselineCacheCorePair():
         coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
         # Do Random Read (Miss), set running to 600s as it is quite a long run
         logMgr.info("Start of random read miss")
-        jobRandRead().run(inteldisk, "{0}G".format(coreSize), RUNTIME_READ_MISS)
+        jobRandRead().run(inteldisk, 
+                            "{0}G".format(coreSize), 
+                            "RandReadMiss",
+                            RUNTIME_READ_MISS)
         logMgr.info("Ending of random read miss")
 
         # Reconfig
@@ -307,7 +345,10 @@ class baselineCacheCorePair():
         coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
         # Do Seq Read (Miss), set running to 600s as it is quite a long run
         logMgr.info("Start of seq read miss")
-        jobSeqRead().run(inteldisk, "{0}G".format(coreSize), RUNTIME_READ_MISS)
+        jobSeqRead().run(inteldisk, 
+                            "{0}G".format(coreSize), 
+                            "SeqReadMiss",
+                            RUNTIME_READ_MISS)
         logMgr.info("Ending of seq read miss")
 
         self.finish.set()

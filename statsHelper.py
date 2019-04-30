@@ -111,7 +111,7 @@ class CasPerfStats:
 
 
 class IoStats:
-    def __init__(self, interval_seconds, cycle_num, dataDir, finish = threading.Event()):
+    def __init__(self, interval_seconds, cycle_num, dataDir, testName = "", finish = threading.Event()):
         self.dump_header = True
         self.skip_Cycle = True
         self.timeStarted = MyTimeStamp.getAppendTime()
@@ -119,6 +119,7 @@ class IoStats:
         self.cycles = cycle_num
         self.finish = finish
         self.dataDir    = dataDir
+        self.testName   = testName
 
     def startCollectStats(self, cacheDev = "", coreDev = "", cacheID = INVALID_CACHE_ID):
         cycles = self.cycles
@@ -159,14 +160,12 @@ class IoStats:
             if cache_id == cache_volume.cacheID:
                 coreDisk = cache_volume.coreDisk
                 casDisk  = cache_volume.casDisk
-                print "Found {0} {1}".format(coreDisk, casDisk)
-        
+                
         for cache_instance in cache_instance_list:
             print "cache_id {0}, cache_instance.cacheID {1}".format(cache_id, cache_instance.cacheID)
             if cache_id == cache_instance.cacheID:
                 cacheDisk = cache_instance.cacheDisk
-                print "Found {0}".format(cacheDisk)
-        
+                
         return "{0} {1} {2}".format(coreDisk, casDisk, cacheDisk)
     
     # Return dev list for (cache, core) pair and its intelcasx-x
@@ -181,7 +180,11 @@ class IoStats:
                 time.sleep(30)
         
     def getDumpFilePath(self):
-        return os.path.join(self.dataDir, "IOStat_{0}.csv".format(self.timeStarted))
+        if self.testName:
+            return os.path.join(self.dataDir, 
+                                "{0}_IOStat_{1}.csv".format(self.testName, self.timeStarted))
+        else:
+            return os.path.join(self.dataDir, "IOStat_{0}.csv".format(self.timeStarted))
 
     def dumpOneDataLine(self, line):
         (date_str, time_str) = MyTimeStamp.getDateAndTime(SECOND)
@@ -214,7 +217,7 @@ class IoStats:
         # Still not hitting second cycle, skip
         elif (True == self.skip_Cycle):
             # DEBUG
-            logMgr.info("Skip {0}".format(line))
+            # logMgr.info("Skip {0}".format(line))
             return 0
         
         words = line.split()
@@ -228,7 +231,7 @@ class IoStats:
     def runIoStatToEnd(self, dev_list):
         iostat_cmd = 'iostat -xmtd {0} {1} {2}'.format(dev_list, self.interval, self.cycles)
 
-        logMgr.info(iostat_cmd)
+        logMgr.info("Starting: {0}".format(iostat_cmd))
 
         process = subprocess.Popen(shlex.split(iostat_cmd), stdout=subprocess.PIPE)
         while True:
