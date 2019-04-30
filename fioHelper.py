@@ -100,15 +100,19 @@ class jobFIO():
         # self.setParm("runtime", 120)
         # self.setParm("time_based")
         
-        fio_cmd = "fio {0}".format(self.genParmStr())
-        logMgr.info(fio_cmd)
         # Get thread for IOStats
         (ret, ioStatThread) = self.getIOStatsThread()
         # Start thread for IOStats
         if (0 == ret):
             ioStatThread.start()
+        
+        logMgr.info("Start of {0}".format(self.parmDict["name"]))
+        fio_cmd = "fio {0}".format(self.genParmStr())
+        logMgr.info(fio_cmd)
         # Start FIO Job
         casAdmin.getOutPutOfCmd(fio_cmd)
+        logMgr.info("End of {0}".format(self.parmDict["name"]))
+
         # Wait for IOStats to finish
         if (0 == ret):
             ioStatThread.join()
