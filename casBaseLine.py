@@ -47,8 +47,8 @@ if __name__ == "__main__":
 
     # Setup logfile and dataDir
     logMgr.setDataDir(output)
-    logFileName = os.path.join(output, time.strftime("smart-storage-%Y-%m-%d-%Hh-%Mm.log"))
-    logMgr.setUp(logFileName)
+    logFileName = os.path.join(logMgr.getDataDir(), time.strftime("smart-storage-%Y-%m-%d-%Hh-%Mm.log"))
+    logMgr.setUpRunningLog(logFileName)
     logMgr.info("\n\n")
 
     # Print notice msg for the user
@@ -56,7 +56,8 @@ if __name__ == "__main__":
 The performance CSV files are in {2}
 Running log is {3}
 Please do NOT do CAS configuration during this test progress
-Just One Minute, Am estimating the running time................""".format(cacheDev, coreDev, output, logFileName)
+Just One Minute, Am estimating the running time................"""\
+    .format(cacheDev, coreDev, logMgr.getDataDir(), logFileName)
 
     print notice_msg
 

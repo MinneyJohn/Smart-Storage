@@ -1,6 +1,8 @@
 #! /usr/bin/python
 
 import time
+import os
+import datetime
 import logging
 
 class logMgr():
@@ -9,7 +11,7 @@ class logMgr():
     dataDir = ""
 
     @classmethod
-    def setUp(cls, logFile):
+    def setUpRunningLog(cls, logFile):
         cls.logName = logFile
         cls.logFile = logFile
         log_setup   = logging.getLogger(cls.logName)
@@ -21,7 +23,7 @@ class logMgr():
         
     @classmethod
     def defaultSetUp(cls):
-        cls.setUp("/tmp/casBaseLine.tmp")
+        cls.setUpRunningLog("/tmp/casBaseLine.tmp")
     
     @classmethod
     def info(cls, msg):
@@ -32,7 +34,10 @@ class logMgr():
     
     @classmethod
     def setDataDir(cls, dataDir):
-        cls.dataDir = dataDir
+        time_str = datetime.datetime.now().strftime("%Y_%m_%d_%Hh:%Mm")
+        run_dataDir = os.path.join(dataDir, time_str)
+        os.mkdir(run_dataDir)
+        cls.dataDir = run_dataDir
     
     @classmethod
     def getDataDir(cls):
