@@ -162,7 +162,6 @@ class IoStats:
                 casDisk  = cache_volume.casDisk
                 
         for cache_instance in cache_instance_list:
-            print "cache_id {0}, cache_instance.cacheID {1}".format(cache_id, cache_instance.cacheID)
             if cache_id == cache_instance.cacheID:
                 cacheDisk = cache_instance.cacheDisk
                 
