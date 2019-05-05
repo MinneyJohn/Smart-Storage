@@ -34,7 +34,7 @@ class logMgr():
     
     @classmethod
     def setDataDir(cls, dataDir):
-        time_str = datetime.datetime.now().strftime("%Y_%m_%d_%Hh:%Mm")
+        time_str = datetime.datetime.now().strftime("%Y_%m_%d_%Hh_%Mm")
         run_dataDir = os.path.join(dataDir, time_str)
         os.mkdir(run_dataDir)
         cls.dataDir = run_dataDir
