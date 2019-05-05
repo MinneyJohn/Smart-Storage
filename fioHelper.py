@@ -248,18 +248,16 @@ class jobSeqRead(jobFIO):
         self.execute()
         return 0
 
+# Single job is faster than multiple job for Seq Write
 class jobSeqWriteMiss(jobFIO):
     def run(self, devName, size, testName, runTime = 0):
         self.setParm("name", testName)
         self.setParm("filename", devName)
         self.setParm("rw", "write")
         self.setParm("bs", "128K")
-
-        # Need to use "offset_increment" to make multiple seq jobs do IO
-        # Against different LBA ranges to simulate the miss workload
-        size_per_job = int(size / self.parmDict["numjobs"])
-        self.setParm("offset_increment", "{0}G".format(size_per_job))
-        self.setParm("size", "{0}G".format(size_per_job))
+        self.setParm("size", "{0}G".format(size))
+        self.setParm("iodepth", "4")
+        self.setParm("numjobs", "1")
 
         self.runTimeControl(runTime)
         self.execute()
