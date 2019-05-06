@@ -268,6 +268,8 @@ class jobSeqReadMiss(jobFIO):
         self.setParm("filename", devName)
         self.setParm("rw", "read")
         self.setParm("bs", "128K")
+        self.setParm("iodepth", "4")
+        self.setParm("numjobs", "1")
 
         # Need to use "offset_increment" to make multiple seq jobs do IO
         # Against different LBA ranges to simulate the miss workload
