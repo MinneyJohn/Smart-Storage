@@ -15,7 +15,7 @@ class logMgr():
         cls.logName = logFile
         cls.logFile = logFile
         log_setup   = logging.getLogger(cls.logName)
-        formatter   = logging.Formatter('%(asctime)s - %(lineno)d - %(module)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S')
+        formatter   = logging.Formatter('%(asctime)s - %(lineno)d - %(module)s %(message)s', datefmt='%m/%d/%Y %H:%M:%S')
         fileHandler = logging.FileHandler(cls.logFile, mode='a')
         fileHandler.setFormatter(formatter)
         log_setup.setLevel(logging.DEBUG)
