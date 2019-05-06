@@ -162,13 +162,13 @@ class jobFIO():
         logMgr.info("Sleep {0} seconds to align io stats and fio job".format(seconds_to_wait))
         time.sleep(seconds_to_wait)
 
-        logMgr.info("Start of Job {0}".format(self.parmDict["name"]))
+        logMgr.info("Start of FIO Job {0}".format(self.parmDict["name"]))
         self.setOutPut()
         fio_cmd = "fio {0}".format(self.genParmStr())
         logMgr.info(fio_cmd)
         # Start FIO Job
         casAdmin.getOutPutOfCmd(fio_cmd)
-        logMgr.info("End of {0}".format(self.parmDict["name"]))
+        logMgr.info("End of FIO Job {0}".format(self.parmDict["name"]))
         
         # Wait for IOStats to finish
         if (0 == ret):
@@ -374,82 +374,65 @@ class baselineCacheCorePair():
         inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
         
         # Do Seq Write (Miss)
-        logMgr.info("Start of sequential write miss")
         jobSeqWriteMiss().run(inteldisk, 
                                 roundedCacheSize, 
                                 "SeqWriteMiss",
                                 timeToFill)
-        logMgr.info("Ending of sequential write miss")
-
+        
         # Do Seq Write (Hit)
-        logMgr.info("Start of sequential write hit")
         jobSeqWrite().run(inteldisk, 
                             roundedCacheSize, 
                             "SeqWriteHit",
                             timeToFill)
-        logMgr.info("Ending of sequential write hit")
-
+        
         # Do Random Write (Hit)
-        logMgr.info("Start of random write hit")
         jobRandWrite().run(inteldisk, 
                             roundedCacheSize, 
                             "RandWriteHit",
                             timeToFill)
-        logMgr.info("Ending of random write hit")
-
+        
         # Do Seq Read (Hit)
-        logMgr.info("Start of sequential read hit")
         jobSeqRead().run(inteldisk, 
                             roundedCacheSize, 
                             "SeqReadHit",
                             timeToFill)
-        logMgr.info("Ending of sequential read hit")
-
+        
         # Do Random Read (Hit)
-        logMgr.info("Start of random read hit")
         jobRandRead().run(inteldisk, 
                             roundedCacheSize, 
                             "RandReadHit",
                             timeToFill)
-        logMgr.info("Ending of random read hit")
-
-
+        
         # Reconfig
         casAdmin.reCfgCacheCorePair(self.cacheDev, self.coreDev)
         inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
 
         # Do Random Write (Miss)
-        logMgr.info("Start of random write miss")
         jobRandWrite().run(inteldisk, 
                             coreSize, 
                             "RandWriteMiss",
                             timeToFill)
-        logMgr.info("Ending of random write miss")
-
+        
         # Reconfig
         casAdmin.reCfgCacheCorePair(self.cacheDev, self.coreDev)
         inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
         
         # Do Seq Read (Miss), set running to 600s as it is quite a long run
-        logMgr.info("Start of seq read miss")
         jobSeqReadMiss().run(inteldisk, 
                                 coreSize, 
                                 "SeqReadMiss",
                                 RUNTIME_READ_MISS)
-        logMgr.info("Ending of seq read miss")
-
+        
         # Reconfig
         casAdmin.reCfgCacheCorePair(self.cacheDev, self.coreDev)
         inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
 
         # Do Rand Read (Miss), set running to 600s as it is quite a long run
-        logMgr.info("Start of random read miss")
         jobRandRead().run(inteldisk, 
                             coreSize, 
                             "RandReadMiss",
                             RUNTIME_READ_MISS)
-        logMgr.info("Ending of random read miss")
-
+        
         self.finish.set()
         logMgr.info("Ready to notify the finish of FIO tasks")
         return 0
