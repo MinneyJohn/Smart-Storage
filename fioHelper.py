@@ -162,6 +162,7 @@ class jobFIO():
         logMgr.info("Sleep {0} seconds to align io stats and fio job".format(seconds_to_wait))
         time.sleep(seconds_to_wait)
 
+        logMgr.info("")
         logMgr.info("Start of FIO Job {0}".format(self.parmDict["name"]))
         self.setOutPut()
         fio_cmd = "fio {0}".format(self.genParmStr())
