@@ -30,4 +30,30 @@ This is what the above command will do:
 * Will trigger all kinds of workload against the exposed cached drive (eg. *intelcas1-1)
   * Rand/Seq Read/Write Miss/Hit cases
   * Will also collect IOSTAT and CAS Stats
-* After the test is complete, some CSV files will be generated in /home/john/casBaseLineData/
+* After the test is complete, data and logs will be generated in /home/john/casBaseLineData/
+
+Here is the log example:
+```
+[root@apss117t 2019_05_05_22h_31m]# pwd
+/home/john/casBaseLineData/2019_05_05_22h_31m
+[root@apss117t 2019_05_05_22h_31m]# ls *.log
+smart-storage-2019-05-05-22h-31m.log
+```
+
+Here is the CSV file for CAS Perf Stats:
+```
+[root@apss117t 2019_05_05_22h_31m]# ls -ll cas*.csv
+-rw-r--r-- 1 root root 38209 May  6 00:07 casPerfStats_2019_05_05_22_31.csv
+```
+
+Here is the CSV files for iostat, there is one CSV file each workload:
+```
+[root@apss117t 2019_05_05_22h_31m]# ls -ll *.csv
+-rw-r--r-- 1 root root  4338 May  5 23:53 RandReadHit_IOStat_2019_05_05_23_38.csv
+-rw-r--r-- 1 root root  4348 May  5 23:23 RandWriteHit_IOStat_2019_05_05_23_08.csv
+-rw-r--r-- 1 root root  3980 May  6 00:07 RandWriteMiss_IOStat_2019_05_05_23_53.csv
+-rw-r--r-- 1 root root  4369 May  5 23:38 SeqReadHit_IOStat_2019_05_05_23_23.csv
+-rw-r--r-- 1 root root  4421 May  5 23:08 SeqWriteHit_IOStat_2019_05_05_22_53.csv
+-rw-r--r-- 1 root root  4304 May  5 22:53 SeqWriteMiss_IOStat_2019_05_05_22_38.csv
+-rw-r--r-- 1 root root  1601 May  5 22:38 WriteSpeedCheck_IOStat_2019_05_05_22_32.csv
+```
