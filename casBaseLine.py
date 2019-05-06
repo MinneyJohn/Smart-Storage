@@ -72,7 +72,10 @@ Just One Minute, Am estimating the running time................"""\
     # casAdmin.showCacheVolumeSet()
 
     # Prepare Stats Collecting Threads
-    casPerfStatsObj = CasPerfStats(DEFAULT_CYCLE_TIME, int(RUNNING_TO_END/DEFAULT_CYCLE_TIME), output, fioFinishEvent)
+    casPerfStatsObj = CasPerfStats(DEFAULT_CYCLE_TIME, 
+                                    int(RUNNING_TO_END/DEFAULT_CYCLE_TIME), 
+                                    logMgr.getDataDir(), 
+                                    fioFinishEvent)
     
     # Prepare FIO test case
     testCase = baselineCacheCorePair(cacheDev, coreDev, fioFinishEvent)

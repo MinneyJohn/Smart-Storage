@@ -266,7 +266,7 @@ class jobSeqReadMiss(jobFIO):
     def run(self, devName, size, testName, runTime = 0):
         self.setParm("name", testName)
         self.setParm("filename", devName)
-        self.setParm("rw", "write")
+        self.setParm("rw", "read")
         self.setParm("bs", "128K")
 
         # Need to use "offset_increment" to make multiple seq jobs do IO
