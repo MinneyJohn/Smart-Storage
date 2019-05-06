@@ -14,14 +14,12 @@ from loggerHelper import *
 from statsHelper import *
 
 '''
-Why setting it to be 1 now:
-a) Now only support single cache intance
-b) At first, we have metadata overhead (2X)
-c) Also due to write miss, write lock is bottleneck
-d) So when times goes, the max write speed is supposed to be at least 4 times
-e) So the total average write speed is 2X of the original speed
+Why setting it to be 1.5 now:
+a) Use seq write to fill caching device
+b) We must make sure the caching device can be fullfilled or the following hit cases
+c) So enlarge the time to estmated to more 30% for sure
 '''
-MAKE_FILL_SAFE_AMPLIFICATION = 1.0 
+MAKE_FILL_SAFE_AMPLIFICATION = 1.3
 
 RUNTIME_READ_MISS   = 700
 RUNTIME_MIN_PER_CAS = 700
@@ -159,10 +157,10 @@ class jobFIO():
         # Wait for second 0 to start, align stats and fio running
         time_seconds_now = datetime.datetime.now().time().second
         seconds_to_wait = (SECONDS_ALIGNMENT - (time_seconds_now % SECONDS_ALIGNMENT))
+        logMgr.info("")
         logMgr.info("Sleep {0} seconds to align io stats and fio job".format(seconds_to_wait))
         time.sleep(seconds_to_wait)
 
-        logMgr.info("")
         logMgr.info("Start of FIO Job {0}".format(self.parmDict["name"]))
         self.setOutPut()
         fio_cmd = "fio {0}".format(self.genParmStr())
