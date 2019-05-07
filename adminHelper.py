@@ -92,6 +92,7 @@ class casAdmin():
         cls.startCache(cacheID, cacheDev)
         cls.addCore(cacheID, coreDev)
         cls.setCacheMode(cacheID, cacheMode)
+        cls.setCleanPolicy(cacheID, "nop")
         return 0
     
     @classmethod
@@ -106,6 +107,12 @@ class casAdmin():
         (ret, output) = cls.getOutPutOfCmd(startCacheCmd)
         return ret
     
+    @classmethod
+    def setCleanPolicy(cls, cacheID, cleanPolicy):
+        setCleanPolicyCmd = "casadm -X -n cleaning -i {0} -p {1}".format(cacheID, cleanPolicy)
+        (ret, output) = cls.getOutPutOfCmd(setCleanPolicyCmd)
+        return ret
+
     @classmethod
     def setCacheMode(cls, cacheID, cacheMode):
         setCacheModeCmd = "casadm -Q -c {0} -i {1}".format(cacheMode, cacheID)
