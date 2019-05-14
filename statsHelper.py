@@ -42,9 +42,8 @@ class CasPerfStats:
             time_seconds_now = datetime.datetime.now().time().second
             seconds_to_wait = (self.interval - (time_seconds_now % self.interval))
             # print "Wait {0}".format(seconds_to_wait)
-            cycle_run = Timer(seconds_to_wait, self.getCycleStats, ())
-            cycle_run.start()
-            cycle_run.join()
+            time.sleep(seconds_to_wait)
+            self.getCycleStats()
             cycles -= 1
         logMgr.info("Exit CAS Stats Collection")
         return 0

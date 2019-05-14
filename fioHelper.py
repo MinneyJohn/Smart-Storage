@@ -14,7 +14,12 @@ from loggerHelper import *
 from statsHelper import *
 
 '''
-Why setting it to be 1.5 now:
+ToDo:
+a) 8K cache line size, how to calcualte dirty data capacity
+'''
+
+'''
+Why setting it to be 1.3 now:
 a) Use seq write to fill caching device
 b) We must make sure the caching device can be fullfilled or the following hit cases
 c) So enlarge the time to estmated to more 30% for sure
@@ -25,7 +30,7 @@ RUNTIME_READ_MISS   = 700
 RUNTIME_MIN_PER_CAS = 700
 RUNNING_TO_END = 360000 # 100 hours, MAX Running Time
 SECONDS_ALIGNMENT = 60 # Time to align stats and fio job
-IOSTAT_RUNTIME_BUFFER = 4 # Buffer minutes for iostat to make sure it is after fio job
+IOSTAT_RUNTIME_BUFFER = 3 # Buffer minutes for iostat to make sure it can cover FIO job
 
 '''
 The customer wants to see those information for one caching software
@@ -209,10 +214,8 @@ class jobRandWrite(jobFIO):
         self.setParm("bs", "4K")
 
         self.runTimeControl(runTime)
-        
         self.execute()
         return 0
-
         
 class jobRandRead(jobFIO):
     def run(self, devName, size, testName, runTime = 0):
@@ -232,58 +235,31 @@ class jobSeqWrite(jobFIO):
         self.setParm("size", "{0}G".format(size))
         self.setParm("rw", "write")
         self.setParm("bs", "128K")
+        # Single Job for sequential
+        self.setParm("iodepth", 16)
+        self.setParm("numjobs", 1)
+
         self.runTimeControl(runTime)
         self.execute()
         return 0
 
 class jobSeqRead(jobFIO):
-    def run(self, devName, size, testName, runTime = ""):
+    def run(self, devName, size, testName, runTime = 0):
         self.setParm("name", testName)
         self.setParm("filename", devName)
         self.setParm("size", "{0}G".format(size))
         self.setParm("rw", "read")
         self.setParm("bs", "128K")
+        self.setParm("iodepth", 16)
+        self.setParm("numjobs", 1)
+
         self.runTimeControl(runTime)
         self.execute()
         return 0
 
-# Single job is faster than multiple job for Seq Write
-class jobSeqWriteMiss(jobFIO):
-    def run(self, devName, size, testName, runTime = 0):
-        self.setParm("name", testName)
-        self.setParm("filename", devName)
-        self.setParm("rw", "write")
-        self.setParm("bs", "128K")
-        self.setParm("size", "{0}G".format(size))
-        self.setParm("iodepth", 4)
-        self.setParm("numjobs", 1)
-
-        self.runTimeControl(runTime)
-        self.execute()
-        return 0    
-
-class jobSeqReadMiss(jobFIO):
-    def run(self, devName, size, testName, runTime = 0):
-        self.setParm("name", testName)
-        self.setParm("filename", devName)
-        self.setParm("rw", "read")
-        self.setParm("bs", "128K")
-        self.setParm("iodepth", 4)
-        self.setParm("numjobs", 1)
-
-        # Need to use "offset_increment" to make multiple seq jobs do IO
-        # Against different LBA ranges to simulate the miss workload
-        size_per_job = int(size / int(self.parmDict["numjobs"]))
-        self.setParm("offset_increment", "{0}G".format(size_per_job))
-        self.setParm("size", "{0}G".format(size_per_job))
-
-        self.runTimeControl(runTime)
-        self.execute()
-        return 0    
-
 # Use Seq Write Miss with single JOB to estimate running time
 # As we'll use seq write miss to fill caching device for hit case
-class jobTestRandWrSpeed(jobFIO):
+class jobTestWriteSpeed(jobFIO):
     def run(self, devName, size, testName, runTime):
         self.setParm("name", testName)
         self.setParm("filename", devName)
@@ -296,22 +272,295 @@ class jobTestRandWrSpeed(jobFIO):
         self.execute()
         return 0
 
-class resetCacheJob():
-    def __init__(self, cacheDev):
-        self.cacheID = casAdmin.getIdByCacheDev(cacheDev)
-        
-    def do(self):
-        casAdmin.resetCacheInstance(self.cacheID, self.cacheDev, self.coreDev, self.cacheMode)
+class jobWriteOverflow(jobFIO):
+    def run(self, devName, cacheSize, coreSize, name, runTime=0):
+        self.setParm("name", name)
+        self.setParm("filename", devName)
+        self.setParm("size", "{0}G".format(coreSize - cacheSize))
+        self.setParm("rw", "write")
+        self.setParm("bs", "4K")
+        self.setParm("iodepth", 16)
+        self.setParm("numjobs", 8)
+        self.setParm("offset", "{0}G".format(cacheSize)) # Do NOT touch caching space
+        self.runTimeControl(runTime)
+        self.execute()
         return 0
 
-class cfgCacheJob():
-    def __init__(self, cacheDev, coreDev):
-        self.cacheID = casAdmin.getAvailableCacheID()
+'''
+Used to fill in caching device for hit case:
+a) Am using seq write, with numjobs "1" and iodepth "16"
+b) Size is supposed to be normalized of caching device
+''' 
+class jobFillCachingDevice(jobFIO):
+    def run(self, devName, size):
+        self.setParm("name", "FillCachingDevice")
+        self.setParm("filename", devName)
+        self.setParm("size", "{0}G".format(size))
+        self.setParm("rw", "write")
+        self.setParm("bs", "128K")
+        self.setParm("iodepth", 16)
+        self.setParm("numjobs", 1)
+        self.execute()
+        return 0
+
+# Used to estimate time to fill in caching devie
+class estimateCacheFullTime():
+    numjob  = 1
+    iodepth = 16
+    runTime = 120
+
+    @classmethod
+    def getTime(cls, cacheDev, coreDev):
+        casAdmin.cfgCacheCorePair(cacheDev, coreDev)
+
+        cacheID   = casAdmin.getIdByCacheDev(cacheDev)
+        inteldisk = casAdmin.getIntelDiskByCoreDev(coreDev)
+        cacheSize = casAdmin.getCacheSizeInGib(cacheDev)
+        
+        logMgr.info("Start of write speed check, keep {0} seconds".format(cls.runTime))
+        jobTestWriteSpeed().run(inteldisk, 
+                                cacheSize, 
+                                "WriteSpeedCheck",
+                                cls.runTime)
+        logMgr.info("Ending of write speed check")
+        dirtyBlocks = int(casAdmin.getFieldCachePerf(cacheID, "Dirty [4KiB blocks]"))
+        writeSpeedInMb = int((dirtyBlocks * 4)/1024/cls.runTime)
+    
+        logMgr.info("For first {0} seconds, Write Speed {1} Mib/s".format(cls.runTime, writeSpeedInMb))
+        
+        # Stop cache instance
+        casAdmin.stopCacheInstance(cacheID)
+        return int((cacheSize * 1024 * MAKE_FILL_SAFE_AMPLIFICATION)/writeSpeedInMb) 
+
+class caseRandReadMiss():
+    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
         self.cacheDev = cacheDev
         self.coreDev = coreDev
-        
+        self.finish = finish
+    
     def do(self):
-        casAdmin.cfgCacheInstance(self.cacheID, self.cacheDev, self.coreDev)
+        # Config cache instance
+        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
+        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+        # Get cache/core and cache size for future usage
+        coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
+        
+        # Do Rand Read (Miss), set running to 600s as it is quite a long run
+        jobRandRead().run(inteldisk, 
+                            coreSize, 
+                            "RandReadMiss",
+                            RUNTIME_READ_MISS)
+        
+        self.finish.set()
+        logMgr.info("Ready to notify the finish of FIO tasks")
+        return 0
+
+class caseRandReadHit():
+    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
+        self.cacheDev = cacheDev
+        self.coreDev = coreDev
+        self.finish = finish
+    
+    def do(self):
+        # Config Cache Instance
+        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
+        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+
+        # Get cache/core and cache size for future usage
+        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
+        coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
+        
+        # Fill in the caching device
+        jobFillCachingDevice().run(inteldisk, cacheSize)
+
+        # Do Random Read (Hit)
+        jobRandRead().run(inteldisk, 
+                            cacheSize, 
+                            "RandReadHit",
+                            RUNTIME_READ_MISS)
+        
+        self.finish.set()
+        return 0
+
+class caseRandWriteMiss():
+    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
+        self.cacheDev = cacheDev
+        self.coreDev = coreDev
+        self.finish = finish
+    
+    def do(self):
+        # Estimate time needed to fill in the caching device
+        timeToFill = estimateCacheFullTime.getTime(self.cacheDev, self.cacheDev)
+        
+        # Config cache instance
+        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
+        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+        # Get cache/core and cache size for future usage
+        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
+        
+        # Do Random Write (Miss)
+        jobRandWrite().run(inteldisk, 
+                            cacheSize, 
+                            "RandWriteMiss",
+                            timeToFill)
+        
+        self.finish.set()
+        logMgr.info("Ready to notify the finish of FIO tasks")
+        return 0
+
+class caseRandWriteHit():
+    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
+        self.cacheDev = cacheDev
+        self.coreDev = coreDev
+        self.finish = finish
+    
+    def do(self):
+        # Config cache instance
+        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
+        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+        # Get cache/core and cache size for future usage
+        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
+        
+        # Fill in the caching device
+        jobFillCachingDevice().run(inteldisk, cacheSize)
+        
+        # Do Random Write (Hit)
+        jobRandWrite().run(inteldisk, 
+                            cacheSize, 
+                            "RandWriteHit",
+                            RUNTIME_READ_MISS)
+        
+        self.finish.set()
+        logMgr.info("Ready to notify the finish of FIO tasks")
+        return 0
+
+class caseSeqReadMiss():
+    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
+        self.cacheDev = cacheDev
+        self.coreDev = coreDev
+        self.finish = finish
+    
+    def do(self):
+        # Config cache instance
+        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
+        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+        # Get cache/core and cache size for future usage
+        coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
+        
+        # Do Rand Read (Miss), set running to 600s as it is quite a long run
+        jobSeqRead().run(inteldisk, 
+                            coreSize, 
+                            "SeqReadMiss",
+                            RUNTIME_READ_MISS)
+        
+        self.finish.set()
+        logMgr.info("Ready to notify the finish of FIO tasks")
+        return 0
+
+class caseSeqReadHit():
+    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
+        self.cacheDev = cacheDev
+        self.coreDev = coreDev
+        self.finish = finish
+    
+    def do(self):
+        # Config Cache Instance
+        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
+        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+
+        # Get cache/core and cache size for future usage
+        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
+        
+        # Fill in the caching device
+        jobFillCachingDevice().run(inteldisk, cacheSize)
+
+        # Do Random Read (Hit)
+        jobSeqRead().run(inteldisk, 
+                        cacheSize, 
+                        "SeqReadHit",
+                        RUNTIME_READ_MISS)
+        
+        self.finish.set()
+        return 0
+
+class caseSeqWriteMiss():
+    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
+        self.cacheDev = cacheDev
+        self.coreDev = coreDev
+        self.finish = finish
+    
+    def do(self):
+        # Estimate time needed to fill in the caching device
+        timeToFill = estimateCacheFullTime.getTime(self.cacheDev, self.cacheDev)
+        
+        # Config cache instance
+        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
+        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+        # Get cache/core and cache size for future usage
+        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
+        coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
+        
+        # Do Seq Write (Miss)
+        jobSeqWrite().run(inteldisk, 
+                            coreSize, 
+                            "SeqWriteMiss",
+                            timeToFill)
+        
+        self.finish.set()
+        logMgr.info("Ready to notify the finish of FIO tasks")
+        return 0
+
+class caseSeqWriteHit():
+    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
+        self.cacheDev = cacheDev
+        self.coreDev = coreDev
+        self.finish = finish
+    
+    def do(self):
+        # Config cache instance
+        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
+        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+        # Get cache/core and cache size for future usage
+        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
+        
+        # Fill in the caching device
+        jobFillCachingDevice().run(inteldisk, cacheSize)
+        
+        # Do Seq Write (Hit)
+        jobSeqWrite().run(inteldisk, 
+                            cacheSize, 
+                            "SeqWriteHit",
+                            RUNTIME_READ_MISS)
+        
+        self.finish.set()
+        logMgr.info("Ready to notify the finish of FIO tasks")
+        return 0
+
+class caseWriteOverflow():
+    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
+        self.cacheDev = cacheDev
+        self.coreDev = coreDev
+        self.finish = finish
+    
+    def do(self):
+        # Config cache instance
+        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
+        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+        # Get cache/core and cache size for future usage
+        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
+        
+        # Fill in the caching device
+        jobFillCachingDevice().run(inteldisk, cacheSize)
+        
+        # Do Seq Write (Hit)
+        jobWriteOverflow().run(inteldisk, 
+                                cacheSize,
+                                coreSize, 
+                                "SeqWriteOverflow",
+                                RUNTIME_READ_MISS)
+        
+        self.finish.set()
+        logMgr.info("Ready to notify the finish of FIO tasks")
         return 0
 
 class baselineCacheCorePair():
@@ -320,30 +569,11 @@ class baselineCacheCorePair():
         self.coreDev = coreDev
         self.finish = finish
     
-    def getSpeedRandWrMissInMib(self, cacheID, inteldisk, cacheSize):
-        testRunTime = 120
-        logMgr.info("Start of write speed check, keep {0} seconds".format(testRunTime))
-        jobTestRandWrSpeed().run(inteldisk, 
-                                cacheSize, 
-                                "WriteSpeedCheck",
-                                testRunTime)
-        logMgr.info("Ending of write speed check")
-        dirtyBlocks = int(casAdmin.getFieldCachePerf(cacheID, "Dirty [4KiB blocks]"))
-        return int((dirtyBlocks * 4)/1024/testRunTime)
-    
-    def getTimeFillCacheWithWrite(self, cacheID, inteldisk, cacheSize):
-        writeSpeedInMb = self.getSpeedRandWrMissInMib(cacheID, inteldisk, cacheSize)
-        logMgr.info("1st Minute, Write Speed {0} Mib/s".format(writeSpeedInMb))
-        return int((cacheSize * 1024 * MAKE_FILL_SAFE_AMPLIFICATION)/writeSpeedInMb) 
-    
     def estimateTotalRunningTime(self, timeToFill):
         if (timeToFill < RUNTIME_MIN_PER_CAS):
             timeToFill = RUNTIME_MIN_PER_CAS
         return int((timeToFill * 6 + RUNTIME_READ_MISS * 3) / 60)
     
-    def roundedSizeByNumJob(self, size):
-        return (size - (size % runningSetup.parmDict["numjobs"]))
-
     def mergeFioOutPut(self):
         return 0
 
@@ -353,56 +583,51 @@ class baselineCacheCorePair():
             print "**ERROR** Please make sure {0} and {1} NOT used".format(self.cacheDev, self.coreDev)
             return 1
 
+        # Estimate the time for running the test case
+        timeToFill = estimateCacheFullTime.getTime(self.cacheDev, self.coreDev)
+        
         # Config Cache Instance
         casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
         inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-
-        # Get cache/core and rounded cache size for future usage
         cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
         coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
-        roundedCacheSize = self.roundedSizeByNumJob(cacheSize)
-
-        # Estimate the time for running the test case
-        cacheID = casAdmin.getIdByCacheDev(self.cacheDev)
-        timeToFill = self.getTimeFillCacheWithWrite(cacheID, inteldisk, cacheSize)
-        totalRunTime = self.estimateTotalRunningTime(timeToFill)
-        runTimeStr = "Estimated Running Time {0} minutes".format(totalRunTime)
-        logMgr.info(runTimeStr)
-        print runTimeStr
-
-        # Reconfig and refetch inteldisk
-        casAdmin.reCfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
         
         # Do Seq Write (Miss)
-        jobSeqWriteMiss().run(inteldisk, 
-                                roundedCacheSize, 
-                                "SeqWriteMiss",
-                                timeToFill)
+        jobSeqWrite().run(inteldisk, 
+                            cacheSize, 
+                            "SeqWriteMiss",
+                            timeToFill)
         
         # Do Seq Write (Hit)
         jobSeqWrite().run(inteldisk, 
-                            roundedCacheSize, 
+                            cacheSize, 
                             "SeqWriteHit",
                             timeToFill)
         
         # Do Random Write (Hit)
         jobRandWrite().run(inteldisk, 
-                            roundedCacheSize, 
+                            cacheSize, 
                             "RandWriteHit",
                             timeToFill)
         
         # Do Seq Read (Hit)
         jobSeqRead().run(inteldisk, 
-                            roundedCacheSize, 
-                            "SeqReadHit",
-                            timeToFill)
+                        cacheSize, 
+                        "SeqReadHit",
+                        timeToFill)
         
         # Do Random Read (Hit)
         jobRandRead().run(inteldisk, 
-                            roundedCacheSize, 
+                            cacheSize, 
                             "RandReadHit",
                             timeToFill)
+        
+        # Do Write for Overflow
+        jobWriteOverflow().run(inteldisk,
+                                cacheSize,
+                                coreSize,
+                                "WriteOverflow",
+                                timeToFill)
         
         # Reconfig
         casAdmin.reCfgCacheCorePair(self.cacheDev, self.coreDev)
@@ -419,10 +644,10 @@ class baselineCacheCorePair():
         inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
         
         # Do Seq Read (Miss), set running to 600s as it is quite a long run
-        jobSeqReadMiss().run(inteldisk, 
-                                coreSize, 
-                                "SeqReadMiss",
-                                RUNTIME_READ_MISS)
+        jobSeqRead().run(inteldisk, 
+                        coreSize, 
+                        "SeqReadMiss",
+                        RUNTIME_READ_MISS)
         
         # Reconfig
         casAdmin.reCfgCacheCorePair(self.cacheDev, self.coreDev)
