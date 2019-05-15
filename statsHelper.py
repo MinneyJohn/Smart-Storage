@@ -259,7 +259,7 @@ class IoStats:
             return ret
 
         logMgr.info("Start generating CSV for iostat")
-        with fp as open(self.getRawFilePath()):
+        with open(self.getRawFilePath(), 'r') as fp:
             line = fp.readline()
             while (line):
                 line = line.strip()
