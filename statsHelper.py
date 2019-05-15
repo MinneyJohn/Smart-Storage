@@ -61,13 +61,19 @@ class CasPerfStats:
     
     def getRawStats(self, cache_id, core_id):
         stats_cmd = 'casadm -P -i {0} -j {1} -o csv'.format(cache_id, core_id)
-        stats_output = subprocess.check_output(stats_cmd, shell=True)
-        return stats_output
-
+        (ret, output) = casAdmin.getOutPutOfCmd(stats_cmd)
+        if 0 == ret:
+            return output
+        else:
+            return ""
+        
     def resetPerfStat(self, cache_id, core_id):
         reset_cmd = 'casadm -Z -i {0} -j {1}'.format(cache_id, core_id)
-        stats_output = subprocess.check_output(reset_cmd, shell=True)
-        return stats_output
+        (ret, output) = casAdmin.getOutPutOfCmd(reset_cmd)
+        if 0 == ret:
+            return output
+        else:
+            return ""
 
     def parseRawStats(self, stats_output, cache_id):
         lines = stats_output.splitlines()
@@ -119,6 +125,7 @@ class IoStats:
         self.finish = finish
         self.dataDir    = dataDir
         self.testName   = testName
+        self.triggerTime = datetime.datetime.now()
 
     def startCollectStats(self, cacheDev = "", coreDev = "", cacheID = INVALID_CACHE_ID):
         cycles = self.cycles
@@ -183,6 +190,13 @@ class IoStats:
                                 "{0}_IOStat_{1}.csv".format(self.testName, self.timeStarted))
         else:
             return os.path.join(self.dataDir, "IOStat_{0}.csv".format(self.timeStarted))
+    
+    def getRawFilePath(self):
+        if self.testName:
+            return os.path.join(self.dataDir, 
+                                "{0}_IOStat_{1}.raw".format(self.testName, self.timeStarted))
+        else:
+            return os.path.join(self.dataDir, "IOStat_{0}.raw".format(self.timeStarted))
 
     def dumpOneDataLine(self, line):
         (date_str, time_str) = MyTimeStamp.getDateAndTime(SECOND)
@@ -227,13 +241,31 @@ class IoStats:
 
 
     def runIoStatToEnd(self, dev_list):
-        iostat_cmd = 'iostat -xmtd {0} {1} {2}'.format(dev_list, self.interval, self.cycles)
+        iostat_cmd = 'iostat -xmtd {0} {1} {2}'.format(dev_list, 
+                                                        self.interval, 
+                                                        self.cycles)
 
         logMgr.info("Starting: {0}".format(iostat_cmd))
 
+        '''
+        # Set the IO trigger time
+        self.triggerTime = datetime.datetime.now()
+        adminHelper.check_output(iostat_cmd)
+        with fp as open(self.getRawFilePath()):
+            line = fp.readline()
+            while (line):
+                if self.finish.isSet():
+                logMgr.info("Got FIO finish notification, Exit IO Stats Collection")
+                return 0
+                line = line.strip()
+                self.parseOneLine(line, dev_list)
+                line = fp.readline()
+            fp.close()
+        '''
+        
         process = subprocess.Popen(shlex.split(iostat_cmd), stdout=subprocess.PIPE)
         while True:
-            if self.finish.isSet():
+            if ('' == line) and self.finish.isSet():
                 logMgr.info("Got FIO finish notification, Exit IO Stats Collection")
                 return 0
             

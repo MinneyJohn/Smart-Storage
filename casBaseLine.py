@@ -7,6 +7,7 @@ import shlex
 from statsHelper import *
 from fioHelper import *
 from loggerHelper import *
+from adminHelper import *
 
 '''
 Here is the mapping from the case name to the case class;
@@ -118,6 +119,9 @@ Please do NOT do CAS configuration during this test progress"""\
     # Wait for the thread
     thread_collect_cas.join() 
     thread_run_fio_jobs.join()
+
+    # Stop cache instance to clear the test
+    casAdmin.stopCacheInstance(casAdmin.getIdByCacheDev(cacheDev))
 
     logMgr.info("Exit Point of CAS baseline Test\n\n\n")
     exit(0)

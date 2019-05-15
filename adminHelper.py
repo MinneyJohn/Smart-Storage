@@ -78,12 +78,12 @@ class casAdmin():
     @classmethod 
     def cfgCacheCorePair(cls, cacheDev, coreDev, cacheMode = "wb"):
         cls.refresh_lock.acquire()
-
+        logMgr.info("Start of configure cache instance")
         cls.refreshCacheVolumeSet()
         cacheID = casAdmin.getAvailableCacheID()
         cls.cfgCacheInstance(cacheID, cacheDev, coreDev, cacheMode)
         cls.refreshCacheVolumeSet()
-
+        logMgr.info("End of configure cache instance")
         cls.refresh_lock.release()
         return 0
     
@@ -122,9 +122,11 @@ class casAdmin():
     @classmethod
     def stopCacheInstance(cls, cacheID):
         cls.refresh_lock.acquire()
+        logMgr.info("Start of Stop Cache Instance {0}".format(cacheID))
         stop_cache = "casadm -T -i {0} -n".format(cacheID)
         (ret, output) = cls.getOutPutOfCmd(stop_cache)
         cls.refreshCacheVolumeSet()
+        logMgr.info("End of Stop Cache Instance {0}".format(cacheID))
         cls.refresh_lock.release()
         return ret
     

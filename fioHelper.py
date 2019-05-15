@@ -148,6 +148,17 @@ class jobFIO():
         self.setParm("output", outputFile)
         self.setParm("output-format", "terse")
 
+    def addFioSummaryHeader(self):
+        outputFile = self.parmDict["output"]
+        fp = open(outputFile, "r")
+        line = fp.readline()
+        fp.close()
+        
+        fp = open(outputFile, "w+")
+        lines = "{0}\n{1}".format(runningSetup.header_terse, line)
+        fp.writelines(lines)
+        fp.close()
+
     def execute(self):
         # FOR DEBUG to run VERY fast
         # self.setParm("runtime", 120)
@@ -174,6 +185,9 @@ class jobFIO():
         casAdmin.getOutPutOfCmd(fio_cmd)
         logMgr.info("End of FIO Job {0}".format(self.parmDict["name"]))
         
+        # Add header to FIO summary
+        self.addFioSummaryHeader()
+
         # Wait for IOStats to finish
         if (0 == ret):
             ioStatThread.join()
@@ -390,7 +404,7 @@ class caseRandWriteMiss():
     
     def do(self):
         # Estimate time needed to fill in the caching device
-        timeToFill = estimateCacheFullTime.getTime(self.cacheDev, self.cacheDev)
+        timeToFill = estimateCacheFullTime.getTime(self.cacheDev, self.coreDev)
         
         # Config cache instance
         casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
@@ -491,7 +505,7 @@ class caseSeqWriteMiss():
     
     def do(self):
         # Estimate time needed to fill in the caching device
-        timeToFill = estimateCacheFullTime.getTime(self.cacheDev, self.cacheDev)
+        timeToFill = estimateCacheFullTime.getTime(self.cacheDev, self.coreDev)
         
         # Config cache instance
         casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
