@@ -6,6 +6,7 @@ import shlex
 
 from statsHelper import *
 from loggerHelper import *
+from adminHelper import *
 
 '''
 Used to calculate the cycle values for some columns
@@ -36,27 +37,33 @@ if __name__ == "__main__":
     RUNNINGT_TIME = args.T
     WORKING_DIR = args.O
 
-    logger.info("Starting Collect Stats, one cycle {0} seconds, run {1} seconds, save to {2}".
-                format(CYCLE_TIME, RUNNINGT_TIME, WORKING_DIR))
-    
-    SetOfCacheVolume.fetchCacheVolumeSet()
-    SetOfCacheVolume.showCacheVolumeSet()
+    # Setup logfile and dataDir
+    logMgr.setDataDir(WORKING_DIR)
+    logFileName = os.path.join(logMgr.getDataDir(), time.strftime("collect-stats-%Y-%m-%d-%Hh-%Mm.log"))
+    logMgr.setUpRunningLog(logFileName)
+    logMgr.info("\n\n")
 
-    casPerfStatsObj = CasPerfStats(CYCLE_TIME, int(RUNNINGT_TIME/CYCLE_TIME), WORKING_DIR)
-    ioStatsObj = IoStats(CYCLE_TIME, int(RUNNINGT_TIME/CYCLE_TIME), WORKING_DIR)
+    logMgr.info("Starting Collect Stats, every cycle {0} seconds, run {1} seconds, save to {2}".
+                format(CYCLE_TIME, RUNNINGT_TIME, WORKING_DIR))
+
+    
+    casAdmin.refreshCacheVolumeSet()
+    casAdmin.showCacheVolumeSet()
+
+    casPerfStatsObj = CasPerfStats(CYCLE_TIME, int(RUNNINGT_TIME/CYCLE_TIME), logMgr.getDataDir())
+    ioStatsObj      = IoStats(CYCLE_TIME, int(RUNNINGT_TIME/CYCLE_TIME), logMgr.getDataDir())
 
     # Create the thread
-    t1 = threading.Thread(target=casPerfStatsObj.startCollectStats()) 
-    t2 = threading.Thread(target=ioStatsObj.startCollectStats()) 
+    thread_cas    = threading.Thread(target=casPerfStatsObj.startCollectStats()) 
+    thread_iostat = threading.Thread(target=ioStatsObj.startCollectStats()) 
   
     # Start the thread 
-    t1.start() 
-    t2.start()
+    thread_cas.start() 
+    thread_iostat.start()
     
     # Wait for the thread
-    t1.join()
-    t2.join()
+    thread_cas.join()
+    thread_iostat.join()
 
-    # print "Finished"
-
+    logMgr.info("End of Collect Stats")
     exit(0)
