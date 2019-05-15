@@ -190,7 +190,7 @@ class IoStats:
             return os.path.join(self.dataDir, "IOStat_{0}.csv".format(self.timeStarted))
     
     def dumpOneDataLine(self, line):
-        (date_str, time_str) = MyTimeStamp.getDateAndTime(getDateAndTime)
+        (date_str, time_str) = MyTimeStamp.getDateAndTime(SECOND)
         new_line = "{0},{1},{2}\n".format(date_str, time_str, line)
         outF = open(self.getDumpFilePath(), "a")
         outF.writelines(new_line)
