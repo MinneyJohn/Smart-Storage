@@ -55,8 +55,12 @@ if __name__ == "__main__":
     casAdmin.refreshCacheVolumeSet()
     casAdmin.showCacheVolumeSet()
 
-    casPerfStatsObj = CasPerfStats(CYCLE_TIME, int(RUNNINGT_TIME/CYCLE_TIME), logMgr.getDataDir())
-    ioStatsObj      = IoStats(CYCLE_TIME, int(RUNNINGT_TIME/CYCLE_TIME), logMgr.getDataDir())
+    casPerfStatsObj = CasPerfStats(CYCLE_TIME, 
+                                int(RUNNINGT_TIME/CYCLE_TIME), 
+                                logMgr.getDataDir())
+    ioStatsObj      = IoStats(CYCLE_TIME, 
+                        int(RUNNINGT_TIME/CYCLE_TIME), 
+                        logMgr.getDataDir())
 
     # Create the thread
     thread_cas    = threading.Thread(target=casPerfStatsObj.startCollectStats()) 

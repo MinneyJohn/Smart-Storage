@@ -35,6 +35,7 @@ class CasPerfStats:
     def startCollectStats(self, cacheID = INVALID_CACHE_ID):
         cycles = self.cycles
         self.filterCacheID = cacheID
+        logMgr.info("Starting of CAS Stats Collection")
         while (cycles):
             if (self.finish.isSet()):
                 logMgr.info("Got FIO finish notification, Exit CAS Stats Collection")
