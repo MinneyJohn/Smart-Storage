@@ -211,13 +211,11 @@ class IoStats:
         if (True == self.dump_header and line.startswith('Device:')):
             header = line.replace('Device:', 'Device')
             header = re.sub("\s+", ",", header)
-            self.curCycle += 1
             self.dumpHeaderLine(header)
             return 0
         # Hit beginning of second cylce, not skip anymore
         elif (True == self.skip_Cycle and line.startswith('Device:')):
             self.skip_Cycle = False
-            self.curCycle += 1
             return 0
         # Still not hitting second cycle, skip
         elif (True == self.skip_Cycle):
@@ -249,6 +247,6 @@ class IoStats:
             if line:
                 self.parseOneLine(line.strip(), dev_list)
         rc = process.poll()
-
-	    logMgr.info("Time Up, Exit IO Stats Collection")
+        
+        logMgr.info("Time Up, Exit IO Stats Collection")
         return rc
