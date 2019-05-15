@@ -37,6 +37,11 @@ class MyTimeStamp():
         else:
             return (datetime.datetime.now().strftime("%Y-%m-%d"), datetime.datetime.now().strftime("%H:%M:%S"))
 
+    @classmethod
+    def getDateAndTimeWithDelta(cls, timeBegin, deltaSeconds):
+        newTime = timeBegin + datetime.timedelta(seconds = deltaSeconds)
+        return (newTime.strftime("%Y-%m-%d"), newTime.strftime("%H:%M:%S")) 
+
 # This class is for cache instance
 class CacheInstance():
     def __init__(self, cache_id, cache_disk):

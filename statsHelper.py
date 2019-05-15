@@ -116,16 +116,16 @@ class CasPerfStats:
 
 
 class IoStats:
-    def __init__(self, interval_seconds, cycle_num, dataDir, testName = "", finish = threading.Event()):
+    def __init__(self, interval_seconds, cycle_num, dataDir, testName = ""):
         self.dump_header = True
         self.skip_Cycle = True
         self.timeStarted = MyTimeStamp.getAppendTime()
         self.interval = interval_seconds
         self.cycles = cycle_num
-        self.finish = finish
         self.dataDir    = dataDir
         self.testName   = testName
         self.triggerTime = datetime.datetime.now()
+        self.curCycle    = 0
 
     def startCollectStats(self, cacheDev = "", coreDev = "", cacheID = INVALID_CACHE_ID):
         cycles = self.cycles
@@ -199,7 +199,8 @@ class IoStats:
             return os.path.join(self.dataDir, "IOStat_{0}.raw".format(self.timeStarted))
 
     def dumpOneDataLine(self, line):
-        (date_str, time_str) = MyTimeStamp.getDateAndTime(SECOND)
+        (date_str, time_str) = MyTimeStamp.getDateAndTimeWithDelta(self.triggerTime,
+                                                                    self.interval * (self.curCycle - 1))
         new_line = "{0},{1},{2}\n".format(date_str, time_str, line)
         outF = open(self.getDumpFilePath(), "a")
         outF.writelines(new_line)
@@ -220,11 +221,13 @@ class IoStats:
         if (True == self.dump_header and line.startswith('Device:')):
             header = line.replace('Device:', 'Device')
             header = re.sub("\s+", ",", header)
+            self.curCycle += 1
             self.dumpHeaderLine(header)
             return 0
         # Hit beginning of second cylce, not skip anymore
         elif (True == self.skip_Cycle and line.startswith('Device:')):
             self.skip_Cycle = False
+            self.curCycle += 1
             return 0
         # Still not hitting second cycle, skip
         elif (True == self.skip_Cycle):
@@ -241,40 +244,28 @@ class IoStats:
 
 
     def runIoStatToEnd(self, dev_list):
-        iostat_cmd = 'iostat -xmtd {0} {1} {2}'.format(dev_list, 
-                                                        self.interval, 
-                                                        self.cycles)
+        iostat_cmd = 'iostat -xmtd {0} {1} {2} > {3}'.format(dev_list, 
+                                                            self.interval, 
+                                                            self.cycles,
+                                                            self.getRawFilePath())
 
         logMgr.info("Starting: {0}".format(iostat_cmd))
 
-        '''
         # Set the IO trigger time
         self.triggerTime = datetime.datetime.now()
-        adminHelper.check_output(iostat_cmd)
+        (ret, output) = adminHelper.check_output(iostat_cmd)
+        if ret:
+            logMgr.info("***ERROR** Failed to get output of iostat")
+            return ret
+
+        logMgr.info("Start generating CSV for iostat")
         with fp as open(self.getRawFilePath()):
             line = fp.readline()
             while (line):
-                if self.finish.isSet():
-                logMgr.info("Got FIO finish notification, Exit IO Stats Collection")
-                return 0
                 line = line.strip()
                 self.parseOneLine(line, dev_list)
                 line = fp.readline()
             fp.close()
-        '''
-        
-        process = subprocess.Popen(shlex.split(iostat_cmd), stdout=subprocess.PIPE)
-        while True:
-            if ('' == line) and self.finish.isSet():
-                logMgr.info("Got FIO finish notification, Exit IO Stats Collection")
-                return 0
-            
-            line = process.stdout.readline()
-            if '' == line and process.poll() is not None:
-                break
-            if line:
-                line = line.strip()
-                self.parseOneLine(line, dev_list)
-        rc = process.poll()
-        logMgr.info("Time Up, Exit IO Stats Collection")
-        return rc
+
+	    logMgr.info("Time Up, Exit IO Stats Collection")
+        return ret
