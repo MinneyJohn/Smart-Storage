@@ -253,7 +253,7 @@ class IoStats:
 
         # Set the IO trigger time
         self.triggerTime = datetime.datetime.now()
-        (ret, output) = casAdmin.check_output(iostat_cmd)
+        (ret, output) = casAdmin.getOutPutOfCmd(iostat_cmd)
         if ret:
             logMgr.info("***ERROR** Failed to get output of iostat")
             return ret
