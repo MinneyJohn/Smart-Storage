@@ -43,6 +43,11 @@ if __name__ == "__main__":
     logMgr.setUpRunningLog(logFileName)
     logMgr.info("\n\n")
 
+    print "Starting Collect Stats, every cycle is {0} seconds, will run for {1} seconds".\
+                format(CYCLE_TIME, RUNNINGT_TIME)
+    print "Running log file is {0}".format(logFileName)
+    print "Data would be saved at {0}".format(logMgr.getDataDir())
+
     logMgr.info("Starting Collect Stats, every cycle {0} seconds, run {1} seconds, save to {2}".
                 format(CYCLE_TIME, RUNNINGT_TIME, WORKING_DIR))
 
