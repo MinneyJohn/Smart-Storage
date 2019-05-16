@@ -290,11 +290,11 @@ class jobWriteOverflow(jobFIO):
     def run(self, devName, cacheSize, coreSize, name, runTime=0):
         self.setParm("name", name)
         self.setParm("filename", devName)
-        self.setParm("size", "{0}G".format(coreSize - cacheSize))
+        # self.setParm("size", "{0}G".format(coreSize - cacheSize))
         self.setParm("rw", "write")
-        self.setParm("bs", "4K")
-        self.setParm("iodepth", 16)
-        self.setParm("numjobs", 8)
+        self.setParm("bs", "128K")
+        self.setParm("iodepth", 8)
+        self.setParm("numjobs", 1)
         self.setParm("offset", "{0}G".format(cacheSize)) # Do NOT touch caching space
         self.runTimeControl(runTime)
         self.execute()
