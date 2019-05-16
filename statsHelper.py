@@ -133,6 +133,7 @@ class IoStats:
         # Wait for some seconds for time alignment
         time_seconds_now = datetime.datetime.now().time().second
         seconds_to_wait = (interval - (time_seconds_now % interval))
+        logMgr.info("Sleep {0} seconds for alignment".format(seconds_to_wait))
         time.sleep(seconds_to_wait)
     
         if (cacheDev and coreDev): # Specify cache,core pair

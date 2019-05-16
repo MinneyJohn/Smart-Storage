@@ -63,8 +63,8 @@ if __name__ == "__main__":
                         logMgr.getDataDir())
 
     # Create the thread
-    thread_cas    = threading.Thread(target=casPerfStatsObj.startCollectStats()) 
-    thread_iostat = threading.Thread(target=ioStatsObj.startCollectStats()) 
+    thread_cas    = threading.Thread(target=casPerfStatsObj.startCollectStats) 
+    thread_iostat = threading.Thread(target=ioStatsObj.startCollectStats) 
   
     # Start the thread 
     thread_cas.start() 
