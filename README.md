@@ -57,3 +57,13 @@ Here is the CSV files for iostat, there is one CSV file each workload:
 -rw-r--r-- 1 root root  4304 May  5 22:53 SeqWriteMiss_IOStat_2019_05_05_22_38.csv
 -rw-r--r-- 1 root root  1601 May  5 22:38 WriteSpeedCheck_IOStat_2019_05_05_22_32.csv
 ```
+
+## Collect CAS related devices' CAS Perf and IOSTAT Data
+Example Usage
+```
+python collectStats.py -C 60 -T 1200 -O /home/john &
+```
+The above command will try to collect CAS Perf and IOSTAT information for all CAS related device:
+* Every 60 seconds per cycle (*-S*)
+* Keep running 1200 seconds (*-T*)
+* Data will be in /home/john/time-stamp
