@@ -1,5 +1,4 @@
 #! /usr/bin/python
-
 import subprocess
 import threading
 import time
@@ -10,6 +9,9 @@ import os
 from threading import Timer
 import argparse
 import shlex
+import configparser
+import shutil
+import fnmatch
 
 from loggerHelper import *
 
@@ -201,11 +203,12 @@ class casAdmin():
     def getOutPutOfCmd(cls, commandStr):
         try:
             output = subprocess.check_output(commandStr, shell=True)
-            return (0, output.strip(" ").rstrip(" \n"))
+            logMgr.debug("Plan to run: {0}".format(commandStr))
+            return (0, output.decode().strip(" ").rstrip(" \n"))
         except:
             logMgr.info("**Exception** {0}".format(commandStr))
             return (1, "")
-   
+        
     @classmethod
     def getWordsOfLine(cls, line, delimiters = ""):
         if delimiters:
@@ -226,8 +229,8 @@ class casAdmin():
         if (m):
             return (int(m.group('cache_id')), int(m.group('core_id')))
         else:
-            print "Not found match"
-            return (-1, -1)
+            logMgr.debug("Do NOT find the caching/core device ID for blkdev {0}".format(device_name))
+            return (INVALID_CACHE_ID, INVALID_CACHE_ID)
     
     @classmethod
     def insertCacheInstance(cls, fields):
@@ -238,7 +241,7 @@ class casAdmin():
     @classmethod
     def insertCacheVolume(cls, fields):
         (cache_id, core_id) = cls.getCacheCoreIdByDevName(fields[5])
-        if (-1 == cache_id or -1 == core_id):
+        if (INVALID_CACHE_ID == cache_id or INVALID_CACHE_ID == core_id):
             return 0
         else:
             # print "Append {0} {1}".format(cache_id, core_id)
@@ -261,7 +264,7 @@ class casAdmin():
         get_cache_core_list = 'casadm -L -o csv'
         stats_output = subprocess.check_output(get_cache_core_list, shell=True)
         # print stats_output
-        return stats_output
+        return stats_output.decode()
 
     @classmethod
     def parseRawCasList(cls, output_str):
@@ -294,12 +297,12 @@ class casAdmin():
 
     @classmethod
     def showCacheVolumeSet(cls):
-        print "We got those cache instances:"
+        print("We got those cache instances:")
         for cache_instance in cls.set_cache_instance:
-            print cache_instance
-        print "We got those cache volumes:"
+            print(cache_instance)
+        print("We got those cache volumes:")
         for cache_volume in cls.set_cache_volume:
-            print cache_volume
+            print(cache_volume)
         return 0  
     
     @classmethod
@@ -339,3 +342,197 @@ class casAdmin():
                 return dataS[index]
             index += 1
         return ""
+
+'''
+This class is used for access/change the mysql configuration file my.cnf
+'''
+class mySqlCfg():
+    sqlCfg = configparser.ConfigParser(allow_no_value=True)
+    sqlCfg.read("/etc/my.cnf")
+    
+    @classmethod
+    def getSection(cls, instID):
+        return "mysqld@{0}".format(instID)
+
+    @classmethod
+    def changeOpt(cls, instID, optName, optValue=""):
+        section = cls.getSection(instID)
+        if optValue:
+            cls.sqlCfg[section][optName] = optValue
+        else: # For option without value
+            cls.sqlCfg[section][optName] = None
+    
+    @classmethod
+    def removeOpt(cls, instID, optName):
+        section = cls.getSection(instID)
+        cls.sqlCfg.remove_option(section, optName)
+    
+    @classmethod
+    def showOpt(cls, instID):
+        section = cls.getSection(instID)
+        for opt in cls.sqlCfg[section]:
+            print ("{0}:{1}".format(opt, cls.sqlCfg[section][opt]))
+    
+    @classmethod
+    def queryOpt(cls, instID, optName):
+        section = cls.getSection(instID)
+        if optName in cls.sqlCfg[section]:
+            return cls.sqlCfg[section][optName]
+        else:
+            return ""
+
+'''
+This class is to do control on mysql instance:
+* Eg. restart mysql instance
+* Do sql query against
+* Purge the binlog files
+'''
+class mySqlInst():    
+    @classmethod
+    def restart(cls, instID):
+        restartCmd = "systemctl restart mysqld@{0}".format(instID)
+        (ret, output) = casAdmin.getOutPutOfCmd(restartCmd)
+        return ret
+    
+    @classmethod
+    def executeSqlStsm(cls, instID, stsm, pwd=""):
+        sock = mySqlCfg.queryOpt(instID, "socket")
+        port = mySqlCfg.queryOpt(instID, "port")
+        if pwd:
+            sqlCmd = "mysql -u root -p{0} -e \"{1}\" --socket={2} --port={3}"\
+                    .format(pwd, stsm, sock, port)
+        else:
+            sqlCmd = "mysql -u root -e \"{0}\" --socket={1} --port={2}"\
+                    .format(stsm, sock, port)
+        return casAdmin.getOutPutOfCmd(sqlCmd)
+
+    @classmethod
+    def genesis(cls, instID):
+        datadir = mySqlCfg.queryOpt(instID, "datadir")
+        logMgr.info("Initial mysql instance {0} with dataDir {1}".format(instID, datadir))
+        if ("" == datadir):
+            return 0
+
+        (ret, output) = casAdmin.getOutPutOfCmd("sudo mkdir -p {0}".format(datadir))
+        if (ret):
+            return ret
+        
+        (ret, output) = casAdmin.getOutPutOfCmd("sudo rm -fr {0}/*".format(datadir))
+        if (ret):
+            return ret
+
+        (ret, output) = casAdmin.getOutPutOfCmd("sudo chmod -R 777 {0}".format(datadir))
+        if (ret):
+            return ret
+
+        (ret, output) = casAdmin.getOutPutOfCmd("sudo chown -hR mysql:mysql {0}".format(datadir))
+        if (ret):
+            return ret
+
+        (ret, output) = casAdmin.getOutPutOfCmd("sudo mysqld --initialize-insecure --user=mysql --datadir={0}".format(datadir))
+        if (ret):
+            return ret
+        
+        time.sleep(5)
+
+        ret = cls.restart(instID)
+        if (ret):
+            logMgr.info("**ERROR** Failed to restart mysql instance {0}".format(instID))
+            return ret
+
+        time.sleep(5)
+
+        logMgr.info("Done of mysqld initial")
+        return ret
+    
+    @classmethod
+    def getBinLogBaseName(cls, instID, pwd):
+        binLogBase = ""
+        getBinBaseStsm = "SHOW GLOBAL VARIABLES like 'log_bin_basename' \G"
+        (ret, output) = mySqlInst.executeSqlStsm(instID, getBinBaseStsm, pwd)
+        if (0 == ret):
+            lines = output.splitlines()
+            for line in lines:
+                line = line.strip(" ").rstrip(" \n").replace(" ", "")
+                if line.startswith("Value:"):
+                    words = line.split(":")
+                    if (2 == len(words)):
+                        binLogBase = words[1]
+                else:
+                    continue
+        return binLogBase
+
+    @classmethod
+    def purgeBinLog(cls, instID, pwd):
+        binLogBase = cls.getBinLogBaseName(instID, pwd)
+        (binFileDir, binFilePattern) = os.path.split(binLogBase)
+        
+        binLogList = []
+        if ("" == binLogBase):
+            return
+        for fileName in os.listdir(binFileDir):
+            if fnmatch.fnmatch(fileName, "{0}.[0-9]*".format(binFilePattern)):
+                binLogList.append(fileName)
+        binLogList = sorted(binLogList)
+        if (3 < len(binLogList)):
+            purgeStsm = "PURGE BINARY LOGS TO '{0}'".format(binLogList[-2])
+            (ret, output) = mySqlInst.executeSqlStsm(instID, purgeStsm, pwd)
+        return
+
+# This class is used to run the scheduleTask    
+class scheduleTask():
+    def __init__(self, function, cycle, totalRun, args=[], kwargs={}):
+        self.func = function
+        self.cycle = cycle
+        self.totalRun = totalRun
+        self.args = args
+        self.kwargs = kwargs
+        
+    def loop(self):
+        N_cycles = int(self.totalRun / self.cycle)
+
+        # Run first with alignment with cycle time
+        time_seconds_now = datetime.datetime.now().time().second
+        firstCycle = (self.cycle - (time_seconds_now % self.cycle))
+        timer = threading.Timer(firstCycle, self.func, self.args, self.kwargs)
+        timer.start()
+        time.sleep(firstCycle)
+        N_cycles -=1
+     
+        while N_cycles:
+            timer = threading.Timer(self.cycle, self.func, self.args, self.kwargs)
+            timer.start()
+            N_cycles -= 1
+            time.sleep(self.cycle)
+
+    def start(self, async = True):
+        if (True == async): # Default
+            loop_thread = threading.Thread(target=self.loop)
+            loop_thread.start()
+            return (0, loop_thread)
+        else:
+            self.loop()
+
+class longTask():
+    def __init__(self, func, align = 1, args=[], kwargs=None):
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+        self.align = align
+    
+    def run(self):
+        timer = threading.Timer(self.startTime, self.func, args=self.args, kwargs=self.kwargs)
+        timer.start()
+        return 0
+
+    def start(self, async = True):
+        time_seconds_now = datetime.datetime.now().time().second
+        self.startTime = (self.align - (time_seconds_now % self.align))
+        
+        if (True == async):
+            time.sleep(self.startTime)
+            running_thread = threading.Thread(target=self.func, args=self.args, kwargs=self.kwargs)
+            running_thread.start()
+            return (0, running_thread)
+        else:
+            self.run()

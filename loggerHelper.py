@@ -5,6 +5,8 @@ import os
 import datetime
 import logging
 
+DEBUG_MODE = False
+
 class logMgr():
     logName = ""
     logFile = ""
@@ -31,6 +33,14 @@ class logMgr():
         if ("" == cls.logName):
             cls.defaultSetUp()
         logging.getLogger(cls.logName).info(msg)
+    
+    @classmethod
+    def debug(cls, msg):
+        global DEBUG_MODE
+        if (True == DEBUG_MODE):
+            cls.info(msg)
+        else:
+            pass
     
     @classmethod
     def setDataDir(cls, dataDir):

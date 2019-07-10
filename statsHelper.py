@@ -22,45 +22,79 @@ The futher analysis against those raw csv files will be done by
 advanced python scripts with more advanced libraries.
 '''
 
-# This class is used to do our own time working
-class CasPerfStats:
-    def __init__(self, interval_seconds, cycle_num, dataDir, finish = threading.Event()):
-        self.dump_header = True
-        self.timeStarted = MyTimeStamp.getAppendTime()
-        self.interval = interval_seconds
-        self.cycles = cycle_num
-        self.dataDir    = dataDir
-        self.finish = finish
+class cycleStatsCollector:
+    def __init__(self, cycleTime, runTime, dataDir, kwargs = {}):
+        self._cycleTime = cycleTime
+        self._runTime   = runTime
+        self._dataDir   = dataDir
+        self._csvFile   = ""
+        self._hasHeader = False
+        self._kwargs    = kwargs
+        #self.handleKwargs(self._kwargs)
+        
+        # This is the args for parsing one line 
+        self._kwargs_parse = {} 
 
-    def startCollectStats(self, cacheID = INVALID_CACHE_ID):
-        cycles = self.cycles
-        self.filterCacheID = cacheID
-        logMgr.info("Starting of CAS Stats Collection")
-        while (cycles):
-            if (self.finish.isSet()):
-                logMgr.info("Got FIO finish notification, Exit CAS Stats Collection")
-                return 0
-            time_seconds_now = datetime.datetime.now().time().second
-            seconds_to_wait = (self.interval - (time_seconds_now % self.interval))
-            # print "Wait {0}".format(seconds_to_wait)
-            time.sleep(seconds_to_wait)
-            self.getCycleStats()
-            cycles -= 1
-        logMgr.info("Exit CAS Stats Collection")
+    # No need to redefine
+    def start(self):
+        self.handleKwargs(self._kwargs)
+        self.getCsvFile()
+        runTask = scheduleTask(self.cycleRun, self._cycleTime, self._runTime)
+        return runTask.start()
+    
+    # When parsing each line, may need extra, this is the kwargs for
+    def setParseKwargs(self, kwargs):
+        self._kwargs_parse = kwargs
+
+    # No Need to redefine
+    def cycleRun(self):
+        lines = self.getCycleOutPut()
+        self.parseCycleValues(lines)
         return 0
 
-    def getDumpFilePath(self):
-        return os.path.join(self.dataDir, "casPerfStats_{0}.csv".format(self.timeStarted))
+    # No need to redefine
+    def getCsvFile(self):
+        if "" == self._csvFile:
+            self._csvFile = os.path.join(self._dataDir, \
+                                        "{0}_{1}.csv".\
+                                        format(self.__class__.__name__, 
+                                                MyTimeStamp.getAppendTime()) )
+        return self._csvFile      
+    
+    # No need to redefine
+    def parseCycleValues(self, lines):
+        if (False == self.validateCycleOutPut(lines)):
+            return False
 
-    def dumpOneDataLine(self, line, cache_id):
-        (date_str, time_str) = MyTimeStamp.getDateAndTime(SECOND)
-        new_line = "{0}, {1}, {2}, {3}\n".format(date_str, time_str, cache_id, line)
-        outF = open(self.getDumpFilePath(), "a")
-        outF.writelines(new_line)
-        outF.close()
+        if (False == self._hasHeader and self.generateHeader(lines)):
+            self._hasHeader = True
+
+        for line in lines:
+            self.parseOneLine(line)    
+
+    # Please define if necessary
+    def validateCycleOutPut(self, lines):
+        return True
+
+    # Please define
+    def getCycleOutPut(self):
+        return ""
+
+    # Please define
+    # Assumption: The header is supposed to be able to generated from one cylce's output
+    def generateHeader(self, lines):
+        return False
+
+    # Please define
+    def parseOneLine(self, line):
         return 0
     
-    def getRawStats(self, cache_id, core_id):
+    # Please define is necessary
+    def handleKwargs(self, kwargs):
+        return 0
+
+class casPerfStats(cycleStatsCollector):
+    def getRawStats(self, cache_id, core_id): # class specific function
         stats_cmd = 'casadm -P -i {0} -j {1} -o csv'.format(cache_id, core_id)
         (ret, output) = casAdmin.getOutPutOfCmd(stats_cmd)
         if 0 == ret:
@@ -75,75 +109,204 @@ class CasPerfStats:
             return output
         else:
             return ""
-
-    def parseRawStats(self, stats_output, cache_id):
-        lines = stats_output.splitlines()
-        # Make sure at least 2 lines for valid stats
-        if (1 >= len(lines)):
-            return 0
-        
-        # Verify 1st line is the header
-        if (False == lines[0].startswith("Core Id,Core Device,Exported Object")):
-            return 0
-        elif (True == self.dump_header):
-            # print "Dump header"
-            new_header = "{0},{1},{2},{3}\n".format("Date", "Time", "Cache Id", lines[0])
-            outF = open(self.getDumpFilePath(), "w+")
-            outF.writelines(new_header)
-            outF.close()
-            self.dump_header = False
+    
+    def handleKwargs(self, kwargs):
+        if "cacheID" in kwargs:
+            self._filterCacheID = kwargs['cacheID']
         else:
-            pass
-
-        for line in lines[1:]:
-            self.dumpOneDataLine(line, cache_id)
+            self._filterCacheID = INVALID_CACHE_ID
         
-        return 0
+    def parseOneLine(self, line):
+        if "cacheID" not in self._kwargs_parse:
+            return 1
 
-    def getCycleStats(self):
+        cacheID = kwargs['cacheID']
+        (dateStr, timeStr) = MyTimeStamp.getDateAndTime(SECOND)
+        new_line = "{0}, {1}, {2}, {3}\n".format(dateStr, timeStr, cacheID, line)
+        outF = open(self.getCsvFile(), "a")
+        outF.writelines(new_line)
+        outF.close()
+        return 0
+    
+    def generateHeader(self, lines):
+        new_header = "{0},{1},{2},{3}\n".format("Date", "Time", "Cache Id", lines[0])
+        outF = open(self.getCsvFile(), "w+")
+        outF.writelines(new_header)
+        outF.close()
+        return True
+        
+    def validateCycleOutPut(self, lines):
+        if (1 >= len(lines)):
+            return False
+        if (False == lines[0].startswith("Core Id,Core Device,Exported Object")):
+            return False
+
+        return True
+
+    def getCycleOutPut(self):
+        raw_info = ""
+
         (cache_inst_list, cache_volume_list) = casAdmin.fetchCacheVolumeSet()
         for cache_volume in cache_volume_list:
-            if (INVALID_CACHE_ID == self.filterCacheID):
+            if (INVALID_CACHE_ID == self._filterCacheID):
                 pass
-            elif (self.filterCacheID == cache_volume.cacheID):
+            elif (self._filterCacheID == cache_volume.cacheID):
                 pass
             else:
                 continue
             
             raw_info = self.getRawStats(cache_volume.cacheID, cache_volume.coreID)
+            
+            # Set kwargs for one line parsing
+            self.setParseKwargs({'cacheID': cache_volume.cacheID})
+
             self.resetPerfStat(cache_volume.cacheID, cache_volume.coreID)
-            self.parseRawStats(raw_info, cache_volume.cacheID)
-        return 0
+        return raw_info.splitlines()
 
+class mysqlBufferPoolStats(cycleStatsCollector):
+    mySqlFileDir = "/var/lib/mysql-files/"
+    headerFile = ""
+            
+    def convertHeaderToCSV(self, rawFile):
+        fh = open(rawFile, "r")
+        lines = fh.read().splitlines()
+        header_str = ""
+        for line in lines:
+            if (header_str):
+                header_str = "{0},{1}".format(header_str, line)
+            else:
+                header_str = line
+        header_str = "{0}, {1}, {2}\n".format("Date", "Time", header_str)
+        fh.close()
 
-class IoStats:
-    def __init__(self, interval_seconds, cycle_num, dataDir, testName = ""):
-        self.dump_header = True
-        self.skip_Cycle = True
-        self.timeStarted = MyTimeStamp.getAppendTime()
-        self.interval = interval_seconds
-        self.cycles = cycle_num
-        self.dataDir    = dataDir
-        self.testName   = testName
+        fh = open(rawFile, "w+")
+        fh.write(header_str)
+        fh.close()
+
+    def handleKwargs(self, kwargs):
+        if "instID" in kwargs:
+            self._instID = kwargs['instID']
+        else:
+            self._instID = INVALID_MYSQL_ID
         
-    def startCollectStats(self, cacheDev = "", coreDev = "", cacheID = INVALID_CACHE_ID):
-        cycles = self.cycles
-        interval = self.interval
+        if "pwd" in kwargs:
+            self._pwd = kwargs['pwd']
+        else:
+            self._pwd = ""
+        
+    def getCycleOutPut(self):
+        cycleFile = os.path.join(self.__class__.mySqlFileDir, "bufferPoolStatsCycle.csv")
+        if (os.path.exists(cycleFile)):
+            os.remove(cycleFile) # Have to remove for SQL to generate it
+        
+        (dateStr, timeStr) = MyTimeStamp.getDateAndTime(SECOND)
 
-        # Wait for some seconds for time alignment
-        time_seconds_now = datetime.datetime.now().time().second
-        seconds_to_wait = (interval - (time_seconds_now % interval))
-        logMgr.info("Sleep {0} seconds for alignment".format(seconds_to_wait))
-        time.sleep(seconds_to_wait)
+        sock = mySqlCfg.queryOpt(self._instID, "socket")
+        port = mySqlCfg.queryOpt(self._instID, "port")
+        queryStsm = "SELECT * FROM information_schema.INNODB_BUFFER_POOL_STATS "\
+                    " INTO OUTFILE '{0}' FIELDS TERMINATED BY ','".format(cycleFile)
+        (ret, output) = mySqlInst.executeSqlStsm(self._instID, queryStsm, self._pwd)
+        if ret:
+            return ret
+        # Read cycle number from the csv file
+        cycleFle_fh = open(cycleFile, "r")
+        cycle_lines = cycleFle_fh.read().splitlines()
+        cycleFle_fh.close()
+        os.remove(cycleFile)
+        return cycle_lines
     
-        if (cacheDev and coreDev): # Specify cache,core pair
-            self.runIoStatToEnd(self.getDevCacheCorePair(cacheDev, coreDev))
-        elif (INVALID_CACHE_ID != cacheID): # Specify cache ID
-            self.runIoStatToEnd(self.getDevListByCacheId(cacheID))
-        else: # Default
-            self.runIoStatToEnd(self.getAllDev())
+    def parseOneLine(self, line):
+        (dateStr, timeStr) = MyTimeStamp.getDateAndTime(SECOND)
+        csvFile_fh = open(self.getCsvFile(), "a+")
+        csvFile_fh.write("{0}, {1}, {2}\n".format(dateStr, timeStr, line))
+        csvFile_fh.close()
+            
+    def generateHeader(self, lines):
+        tmpHeaderFileName = os.path.join(self.__class__.mySqlFileDir, \
+                                        "bufferPoolStatsHeader.{0}.csv"\
+                                        .format(MyTimeStamp.getAppendTime()))
+        targetHeaderFileName = os.path.join(logMgr.getDataDir(), "bufferPoolStatsHeader.csv")
+
+        headerStsm = "SELECT column_name FROM information_schema.columns WHERE table_schema = 'information_schema' "\
+                     " AND table_name = 'INNODB_BUFFER_POOL_STATS' INTO OUTFILE '{0}'"\
+                     .format(tmpHeaderFileName)
+        (ret, output) = mySqlInst.executeSqlStsm(self._instID, headerStsm, self._pwd)
+        if (1 == ret):
+            return False
+        shutil.move(tmpHeaderFileName, targetHeaderFileName)
+        # os.rename(tmpHeaderFileName, targetHeaderFileName)
+        self.convertHeaderToCSV(targetHeaderFileName)
+
+        header_fh = open(targetHeaderFileName, "r")
+        header_lines = header_fh.read().splitlines()
+        header_fh.close()
+
+        csvFile_fh = open(self.getCsvFile(), "a+")
+        for line in header_lines:
+            csvFile_fh.write("{0}\n".format(line))
+        csvFile_fh.close()
+
+        return True
+
+class longRunStatsCollector():
+    def __init__(self, cycleTime, runTime, dataDir, kwargs = {}):
+        self._cycleTime = cycleTime
+        self._runTime   = runTime
+        self._dataDir   = dataDir
+        self._kwargs    = kwargs
+        self._csvFile   = ""
+        self._hasHeader = False
+
+        # Args for parsing one line
+        self._kwargs_parse = {}
+
+    def start(self):
+        self.handleKwargs(self._kwargs)
+        self.getCsvFile()
+        (ret, runningThread) = longTask(self.runStats, align = self._cycleTime).start()
+        return (ret, runningThread)
+    
+    def getCsvFile(self):
+        if "" == self._csvFile:
+            self._csvFile = os.path.join(self._dataDir, \
+                                        "{0}_{1}.csv".\
+                                        format(self.__class__.__name__, 
+                                                MyTimeStamp.getAppendTime()) )
+        return self._csvFile     
+    
+    def generateRunCommand(self):
+        return cmd
+    
+    def parseOneLine(self, line):
         return 0
-    
+
+    def setParseKwargs(self, kwargs):
+        self._kwargs_parse = kwargs
+
+    def generateHeader(self, line):
+        print("In Parent's generateHeader")
+        return False
+
+    def runStats(self):
+        runCmd = self.generateRunCommand()
+
+        process = subprocess.Popen(shlex.split(runCmd), stdout=subprocess.PIPE)
+        while True:
+            line = process.stdout.readline().decode()
+            if line == '' and process.poll() is not None:
+                logMgr.info("Finish of {0}".format(runCmd))
+                break
+            if line:
+                if (False == self._hasHeader and self.generateHeader(line)):
+                    self._hasHeader = True
+
+                self.parseOneLine(line)
+        rc = process.poll()
+        
+        logMgr.info("Time Up, Exit {0}".format(runCmd))
+        return rc
+
+class ioStats(longRunStatsCollector):   
     def getAllDev(self):
         (cache_instance_list, cache_volume_list) = casAdmin.fetchCacheVolumeSet()
         dev_list = ""
@@ -173,82 +336,71 @@ class IoStats:
                 
         return "{0} {1} {2}".format(coreDisk, casDisk, cacheDisk)
     
-    # Return dev list for (cache, core) pair and its intelcasx-x
-    # Will wait until the cache instance configured for cache/core pair
-    def getDevCacheCorePair(self, cacheDev, coreDev):
-        while (True):
-            casDisk = casAdmin.getIntelDiskByCoreDev(coreDev)
-            if (casDisk):
-                return "{0} {1} {2}".format(cacheDev, coreDev, casDisk)
-            else:
-                logMgr.info("**WARNING** CAS not configured on {0}, sleep 30s and wait".format(coreDev))
-                time.sleep(30)
-        
-    def getDumpFilePath(self):
-        if self.testName:
-            return os.path.join(self.dataDir, 
-                                "{0}_IOStat_{1}.csv".format(self.testName, self.timeStarted))
+    def handleKwargs(self, kwargs):
+        if "devList" in kwargs:
+            self._devList = kwargs['devList']
         else:
-            return os.path.join(self.dataDir, "IOStat_{0}.csv".format(self.timeStarted))
-    
-    def dumpOneDataLine(self, line):
-        (date_str, time_str) = MyTimeStamp.getDateAndTime(SECOND)
-        new_line = "{0},{1},{2}\n".format(date_str, time_str, line)
-        outF = open(self.getDumpFilePath(), "a")
-        outF.writelines(new_line)
-        outF.close()
-        return 0
+            self._devList = ""
         
-    def dumpHeaderLine(self, line):
-        new_header = "{0}, {1}, {2}\n".format("Date", "Time", line)
-        outF = open(self.getDumpFilePath(), "w+")
-        outF.writelines(new_header)
-        outF.close()
-        self.dump_header = False
-        return 0
+        if "cacheID" in kwargs:
+            self._cacheID = kwargs['cacheID']
+        else:
+            self._cacheID = INVALID_CACHE_ID
+        
+        self._hitCycle = 0
+            
+    def generateHeader(self, line):
+        print("In Child's generateHeader, {0}".format(line))
+        if line:
+            if line.startswith('Device:'):
+                header = line.replace('Device:', 'Device')
+                header = re.sub("\s+", ",", header)
+                new_header = "{0}, {1}, {2}\n".format("Date", "Time", header)
+                outF = open(self.getCsvFile(), "w+")
+                outF.writelines(new_header)
+                outF.close()
+                return True
+        return False
 
-    # Always pass the 1st cycle data as it NOT average by iostat design
-    def parseOneLine(self, line, dev_list):
-        # First Cycle
-        if (True == self.dump_header and line.startswith('Device:')):
-            header = line.replace('Device:', 'Device')
-            header = re.sub("\s+", ",", header)
-            self.dumpHeaderLine(header)
+    def parseOneLine(self, line):
+        if "devList" in self._kwargs_parse:
+            devList = self._kwargs_parse['devList']
+        else:
             return 0
-        # Hit beginning of second cylce, not skip anymore
-        elif (True == self.skip_Cycle and line.startswith('Device:')):
-            self.skip_Cycle = False
-            return 0
-        # Still not hitting second cycle, skip
-        elif (True == self.skip_Cycle):
-            # DEBUG
-            # logMgr.info("Skip {0}".format(line))
+
+        if line.startswith('Device:'):
+            self._hitCycle += 1
+        
+        if (1 >= self._hitCycle): # Only record since 2 cycles
             return 0
         
         words = line.split()
-        if len(words) and (words[0] in dev_list):
+        if len(words) and (words[0] in devList):
             line = re.sub("\s+", ",", line)
-            self.dumpOneDataLine(line)
+            (dateStr, timeStr) = MyTimeStamp.getDateAndTime(SECOND)
+            new_line = "{0},{1},{2}\n".format(dateStr, timeStr, line)
+            outF = open(self.getCsvFile(), "a")
+            outF.writelines(new_line)
+            outF.close()
+        return 0
+    
+    def generateRunCommand(self):
+        if (self._devList): # Specify cache,core pair
+            self._devToCollect = self._devList
+        elif (INVALID_CACHE_ID != self._cacheID): # Specify cache ID
+            self._devToCollect = self.getDevListByCacheId(self._cacheID)
+        else: # Default
+            self._devToCollect = self.getAllDev()
 
-        return 0      
-
-
-    def runIoStatToEnd(self, dev_list):
-        iostat_cmd = 'iostat -xmtd {0} {1} {2}'.format(dev_list, 
-                                                        self.interval, 
-                                                        self.cycles)
-
-        logMgr.info("Starting: {0}".format(iostat_cmd))
-
-        process = subprocess.Popen(shlex.split(iostat_cmd), stdout=subprocess.PIPE)
-        while True:
-            line = process.stdout.readline()
-            if line == '' and process.poll() is not None:
-                logMgr.info("Finish of IOSTAT Command")
-                break
-            if line:
-                self.parseOneLine(line.strip(), dev_list)
-        rc = process.poll()
+        iostatCmd = 'iostat -xmtd {0} {1} {2}'.format(self._devToCollect, 
+                                                        self._cycleTime, 
+                                                        int(self._runTime / self._cycleTime))
         
-        logMgr.info("Time Up, Exit IO Stats Collection")
-        return rc
+        # Set kwargs for one line parsing
+        self.setParseKwargs({'devList': self._devToCollect})
+        return iostatCmd
+
+    
+class cpuUsage(longRunStatsCollector):
+    def hello(self):
+        return 0

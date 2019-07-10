@@ -24,7 +24,7 @@ def setupArgsParser():
 
 def verifyArgs(args):
     if False == os.path.isdir(args.O):
-        print "Please create dir \"{0}\" and then rerun\n".format(args.O)
+        print("Please create dir \"{0}\" and then rerun\n".format(args.O))
         exit(1)
 
 if __name__ == "__main__": 
@@ -43,36 +43,37 @@ if __name__ == "__main__":
     logMgr.setUpRunningLog(logFileName)
     logMgr.info("\n\n")
 
-    print "Starting Collect Stats, every cycle is {0} seconds, will run for {1} seconds".\
-                format(CYCLE_TIME, RUNNINGT_TIME)
-    print "Running log file is {0}".format(logFileName)
-    print "Data would be saved at {0}".format(logMgr.getDataDir())
+    print("Starting Collect Stats, every cycle is {0} seconds, will run for {1} seconds".\
+                format(CYCLE_TIME, RUNNINGT_TIME))
+    print("Running log file is {0}".format(logFileName))
+    print("Data would be saved at {0}".format(logMgr.getDataDir()))
 
     logMgr.info("Starting Collect Stats, every cycle {0} seconds, run {1} seconds, save to {2}".
                 format(CYCLE_TIME, RUNNINGT_TIME, WORKING_DIR))
 
     
-    casAdmin.refreshCacheVolumeSet()
-    casAdmin.showCacheVolumeSet()
+    #casAdmin.refreshCacheVolumeSet()
+    #casAdmin.showCacheVolumeSet()
 
-    casPerfStatsObj = CasPerfStats(CYCLE_TIME, 
-                                int(RUNNINGT_TIME/CYCLE_TIME), 
-                                logMgr.getDataDir())
-    ioStatsObj      = IoStats(CYCLE_TIME, 
-                        int(RUNNINGT_TIME/CYCLE_TIME), 
-                        logMgr.getDataDir())
+    #casPerf = casPerfStats(CYCLE_TIME, RUNNINGT_TIME, logMgr.getDataDir())
+    ioStats = ioStats(CYCLE_TIME, RUNNINGT_TIME, logMgr.getDataDir(), kwargs = {'devList': "nvme1n1"})
+    #(ret, casPerfGoing) = casPerf.start()
+    #if ret:
+    #    exit(0)
+    (ret, ioStatsGoing) = ioStats.start()
+    if ret:
+        exit(0)
 
-    # Create the thread
-    thread_cas    = threading.Thread(target=casPerfStatsObj.startCollectStats) 
-    thread_iostat = threading.Thread(target=ioStatsObj.startCollectStats) 
-  
-    # Start the thread 
-    thread_cas.start() 
-    thread_iostat.start()
-    
+    bufferPoolStats = mysqlBufferPoolStats(CYCLE_TIME, RUNNINGT_TIME, logMgr.getDataDir(), \
+                                            kwargs = {'instID': 3, 'pwd': 'intel123'})
+    (ret, bufferPoolGoing) = bufferPoolStats.start()
+    if (ret):
+        exit(0)
+
     # Wait for the thread
-    thread_cas.join()
-    thread_iostat.join()
+    #casPerfGoing.join()
+    ioStatsGoing.join()
+    bufferPoolGoing.join()
 
     logMgr.info("End of Collect Stats")
     exit(0)
