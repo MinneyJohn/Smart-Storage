@@ -257,20 +257,32 @@ class benchBufferSize:
         self.sbTaskList = ["/usr/share/sysbench/oltp_read_write.lua",\
                             "/usr/share/sysbench/oltp_read_only.lua",\
                             "/usr/share/sysbench/oltp_write_only.lua"]
-        self.threadsNumList = [100] # TODO
-        self.statsCycle = 5 # TODO
-    
-    def triggerOneSbTask(self, sbTask):
-        sbRunTask = sysbenchTask(self.db, sbTask, self.time, action="run")
-        for threadNum in self.threadsNumList:
-            sbRunTask.setOpt("threads", threadNum)
-            sbRunTask.trigger()
-            return 0
+        self.threadsNumList = [100]
+        self.statsCycle = 5
     
     def triggerAllTask(self):
-        for sbTask in self.sbTaskList:
-            self.triggerOneSbTask(sbTask)
+        for threadNum in self.threadsNumList:
+            for sbTask in self.sbTaskList:   
+                sbRunTask = sysbenchTask(self.db, sbTask, self.time, action="run")
+                sbRunTask.setOpt("threads", threadNum)
+                sbRunTask.setOpt("report-interval", self.statsCycle)
+                sbRunTask.trigger()
         return 0
+
+    def getCustomerCfg(self):
+        self.threadsNumList = []
+        thread_num_list = taskCfg.queryOpt("sysbench", "THREAD_NUM_LIST")
+        if thread_num_list:
+            words = re.split(",", thread_num_list)
+            for word in words:
+                self.threadsNumList.append(int(word))
+        else:
+            self.threadsNumList = [100]
+
+        self.statsCycle = 5
+        statsCycleCfg = taskCfg.queryOpt("sysbench", "STATS_CYCLE")
+        if statsCycleCfg:
+            self.statsCycle = int(statsCycleCfg)
 
     def getBufferSizeList(self, totalMem, dbSize):
         sizeSet = set()
@@ -304,6 +316,9 @@ class benchBufferSize:
         return memory_in_GB
 
     def startBench(self):
+        # Get the customer configuration
+        self.getCustomerCfg()
+
         # Startup the cache instance
         mySqlInst.genesis(self.db.instID)
     
@@ -336,9 +351,28 @@ class defaultBench():
         self.sbTaskList = ["/usr/share/sysbench/oltp_read_write.lua",\
                             "/usr/share/sysbench/oltp_read_only.lua",\
                             "/usr/share/sysbench/oltp_write_only.lua"]
-        self.threadNum  = 100 # TODO
+        self.threadsNumList  = [100] # TODO
+        self.statsCycle = 5
         
+    def getCustomerCfg(self):
+        self.threadsNumList = []
+        thread_num_list = taskCfg.queryOpt("sysbench", "THREAD_NUM_LIST")
+        if thread_num_list:
+            words = re.split(",", thread_num_list)
+            for word in words:
+                self.threadsNumList.append(int(word))
+        else:
+            self.threadsNumList = [100]
+
+        self.statsCycle = 5
+        statsCycleCfg = taskCfg.queryOpt("sysbench", "STATS_CYCLE")
+        if statsCycleCfg:
+            self.statsCycle = int(statsCycleCfg)
+
     def startBench(self):
+        #Read the customer configuration
+        self.getCustomerCfg()
+
         # Startup the cache instance
         mySqlInst.genesis(self.db.instID)
     
@@ -348,9 +382,11 @@ class defaultBench():
         # Prepare Data
         self.db.prepareData()
 
-        for sbTask in self.sbTaskList:
-            sbRunTask = sysbenchTask(self.db, sbTask, self.time, action="run")
-            sbRunTask.setOpt("threads", self.threadNum)
-            sbRunTask.trigger()
+        for threadNum in self.threadsNumList:
+            for sbTask in self.sbTaskList:    
+                sbRunTask = sysbenchTask(self.db, sbTask, self.time, action="run")
+                sbRunTask.setOpt("threads", threadNum)
+                sbRunTask.setOpt("report-interval", self.statsCycle)
+                sbRunTask.trigger()
 
         return 0

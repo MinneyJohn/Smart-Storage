@@ -545,6 +545,14 @@ class taskCfg():
     def queryOpt(cls, section, opt):
         if section in cls.taskCfg:
             if opt in cls.taskCfg[section]:
-                return cls.taskCfg[section][opt]
+                optStr = cls.taskCfg[section][opt]
+                optStr = re.sub("\s+", "", optStr) # Remove Space
+                return optStr
         else:
             return ""
+    
+    @classmethod
+    def showOpt(cls):
+        for section in cls.taskCfg:
+            for opt in cls.taskCfg[section]:
+                print(cls.queryOpt(section, opt))

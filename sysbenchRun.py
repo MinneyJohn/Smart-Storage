@@ -65,7 +65,13 @@ if __name__ == "__main__":
     logMgr.setUpRunningLog(logFileName)
     logMgr.info("\n\n")
     
-    db = mysqlHelper.dataBase(int(args.inst), "sbtest", "intel123", int(args.tables), int(args.rows))
+    dbName = taskCfg.queryOpt("sysbench", "DB_NAME")
+    pwd = taskCfg.queryOpt("sysbench", "PWD")
+    if "" == dbName:
+        dbName = "sbtest"
+    if "" == pwd:
+        pwd = "intel123"
+    db = mysqlHelper.dataBase(int(args.inst), dbName, pwd, int(args.tables), int(args.rows))
 
     benchTask = BENCH_CASE_TO_CLASS[args.bench](db, int(args.time))
     benchTask.startBench()
