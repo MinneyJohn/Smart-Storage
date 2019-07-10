@@ -536,3 +536,15 @@ class longTask():
             return (0, running_thread)
         else:
             self.run()
+
+class taskCfg():
+    taskCfg = configparser.ConfigParser(allow_no_value=True)
+    taskCfg.read("task.cnf")
+    
+    @classmethod
+    def queryOpt(cls, section, opt):
+        if section in cls.taskCfg:
+            if opt in cls.taskCfg[section]:
+                return cls.taskCfg[section][opt]
+        else:
+            return ""

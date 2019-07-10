@@ -15,8 +15,8 @@ from adminHelper import *
 from loggerHelper import *
 
 '''
-This script is supposed to use only standard python 2.7 library,
-because our CAS code only expects the standard python 2.7.
+This script is supposed to use only standard python 3.6 library,
+because our CAS code only expects the standard python 3.6.
 And it is limited to generate raw CSV files with raw data.
 The futher analysis against those raw csv files will be done by
 advanced python scripts with more advanced libraries.
@@ -70,7 +70,13 @@ class cycleStatsCollector:
             self._hasHeader = True
 
         for line in lines:
-            self.parseOneLine(line)    
+            csvLine = self.parseOneLine(line)    
+            if csvLine:
+                outF = open(self.getCsvFile(), "a")
+                outF.writelines(csvLine)
+                outF.close()
+        
+
 
     # Please define if necessary
     def validateCycleOutPut(self, lines):
@@ -86,8 +92,9 @@ class cycleStatsCollector:
         return False
 
     # Please define
+    # Return String: the CSV line will be written into CSV file
     def parseOneLine(self, line):
-        return 0
+        return ""
     
     # Please define is necessary
     def handleKwargs(self, kwargs):
@@ -118,15 +125,12 @@ class casPerfStats(cycleStatsCollector):
         
     def parseOneLine(self, line):
         if "cacheID" not in self._kwargs_parse:
-            return 1
+            return ""
 
         cacheID = kwargs['cacheID']
         (dateStr, timeStr) = MyTimeStamp.getDateAndTime(SECOND)
         new_line = "{0}, {1}, {2}, {3}\n".format(dateStr, timeStr, cacheID, line)
-        outF = open(self.getCsvFile(), "a")
-        outF.writelines(new_line)
-        outF.close()
-        return 0
+        return new_line
     
     def generateHeader(self, lines):
         new_header = "{0},{1},{2},{3}\n".format("Date", "Time", "Cache Id", lines[0])
@@ -217,9 +221,7 @@ class mysqlBufferPoolStats(cycleStatsCollector):
     
     def parseOneLine(self, line):
         (dateStr, timeStr) = MyTimeStamp.getDateAndTime(SECOND)
-        csvFile_fh = open(self.getCsvFile(), "a+")
-        csvFile_fh.write("{0}, {1}, {2}\n".format(dateStr, timeStr, line))
-        csvFile_fh.close()
+        return("{0}, {1}, {2}\n".format(dateStr, timeStr, line))
             
     def generateHeader(self, lines):
         tmpHeaderFileName = os.path.join(self.__class__.mySqlFileDir, \
@@ -266,6 +268,9 @@ class longRunStatsCollector():
         (ret, runningThread) = longTask(self.runStats, align = self._cycleTime).start()
         return (ret, runningThread)
     
+    def handleKwargs(self, kwargs):
+        return 0
+
     def getCsvFile(self):
         if "" == self._csvFile:
             self._csvFile = os.path.join(self._dataDir, \
@@ -278,13 +283,12 @@ class longRunStatsCollector():
         return cmd
     
     def parseOneLine(self, line):
-        return 0
+        return ""
 
     def setParseKwargs(self, kwargs):
         self._kwargs_parse = kwargs
 
     def generateHeader(self, line):
-        print("In Parent's generateHeader")
         return False
 
     def runStats(self):
@@ -294,16 +298,21 @@ class longRunStatsCollector():
         while True:
             line = process.stdout.readline().decode()
             if line == '' and process.poll() is not None:
-                logMgr.info("Finish of {0}".format(runCmd))
+                logMgr.debug("Finish of {0}".format(runCmd))
                 break
             if line:
                 if (False == self._hasHeader and self.generateHeader(line)):
                     self._hasHeader = True
 
-                self.parseOneLine(line)
+                csvLine = self.parseOneLine(line)
+                if csvLine:
+                    outF = open(self.getCsvFile(), "a")
+                    outF.writelines(csvLine)
+                    outF.close()
+
         rc = process.poll()
         
-        logMgr.info("Time Up, Exit {0}".format(runCmd))
+        logMgr.debug("Time Up, Exit {0}".format(runCmd))
         return rc
 
 class ioStats(longRunStatsCollector):   
@@ -350,7 +359,6 @@ class ioStats(longRunStatsCollector):
         self._hitCycle = 0
             
     def generateHeader(self, line):
-        print("In Child's generateHeader, {0}".format(line))
         if line:
             if line.startswith('Device:'):
                 header = line.replace('Device:', 'Device')
@@ -366,23 +374,21 @@ class ioStats(longRunStatsCollector):
         if "devList" in self._kwargs_parse:
             devList = self._kwargs_parse['devList']
         else:
-            return 0
+            return ""
 
         if line.startswith('Device:'):
             self._hitCycle += 1
         
         if (1 >= self._hitCycle): # Only record since 2 cycles
-            return 0
-        
+            return ""
+    
         words = line.split()
         if len(words) and (words[0] in devList):
             line = re.sub("\s+", ",", line)
             (dateStr, timeStr) = MyTimeStamp.getDateAndTime(SECOND)
             new_line = "{0},{1},{2}\n".format(dateStr, timeStr, line)
-            outF = open(self.getCsvFile(), "a")
-            outF.writelines(new_line)
-            outF.close()
-        return 0
+            return new_line
+        return ""
     
     def generateRunCommand(self):
         if (self._devList): # Specify cache,core pair
@@ -400,7 +406,60 @@ class ioStats(longRunStatsCollector):
         self.setParseKwargs({'devList': self._devToCollect})
         return iostatCmd
 
-    
-class cpuUsage(longRunStatsCollector):
-    def hello(self):
-        return 0
+
+'''
+root@sm114 Smart-Storage]# mpstat 2 2
+Linux 3.10.0-862.el7.x86_64 (sm114.lab7217.local)       07/08/2019      _x86_64_        (88 CPU)
+
+09:51:24 PM  CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
+09:51:26 PM  all   37.58    0.00   11.17    0.60    0.00    0.00    0.00    0.00    0.00   50.66
+09:51:28 PM  all   38.36    0.00   11.17    0.61    0.00    0.00    0.00    0.00    0.00   49.86
+Average:     all   37.97    0.00   11.17    0.60    0.00    0.00    0.00    0.00    0.00   50.26
+'''
+class cpuUsageStats(longRunStatsCollector):
+    def generateHeader(self, line):
+        header = ""
+        m = re.match(r"(.*)CPU(.*)(usr)(.*)(sys)(.*)", line)
+        if m:
+            words = line.split()
+            N_word = len(words)
+            if ("PM" == words[1]):
+                words[0] = "Date"
+                words[1] = "Time"
+            for word in words:
+                if ("" == header):
+                    header = word
+                else:
+                    header = "{0}, {1}\n".format(header, word)
+            outF = open(self.getCsvFile(), "w+")
+            outF.writelines(header)
+            outF.close()
+            return True
+        return False
+
+    def parseOneLine(self, line):
+        m = re.match(r"(.*)(?P<hour>\d+):(?P<min>\d+):(?P<sec>\d+)(\s+)(?P<noon>(PM|AM))(\s+)(all)(.*)", line)
+        if (m):
+            hour    = int(m.group('hour'))
+            minute  = int(m.group('min'))
+            second  = int(m.group('sec'))
+            if ("PM" == m.group('noon')):
+                hour += 12
+            (dateStr, timeStr) = MyTimeStamp.getDateAndTime(SECOND)
+            timeStr = "{0:02d}:{1:02d}:{2:02d}".format(hour, minute, second)
+            words = line.split()
+            words[0] = dateStr
+            words[1] = timeStr
+            csvLine = ""
+            for word in words:
+                if ("" == csvLine):
+                    csvLine = word
+                else:
+                    csvLine = "{0}, {1}\n".format(csvLine, word)
+            return csvLine
+        return ""
+
+    def generateRunCommand(self):
+        mpstatCmd = 'mpstat {0} {1}'.format(self._cycleTime, 
+                                            int(self._runTime / self._cycleTime))
+        return mpstatCmd
