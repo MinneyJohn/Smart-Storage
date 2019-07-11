@@ -16,15 +16,15 @@ from statsHelper import *
 import mysqlHelper
 
 BENCH_CASE_TO_CLASS = {"default":          mysqlHelper.defaultBench,
-                        "bufferPoolSize":  mysqlHelper.benchBufferSize,
-                        "disk":            mysqlHelper.benchOneBlockDevice}
-BENCH_CASE_LIST = ["default", "bufferPoolSize", "disk"]
+                        "disk":            mysqlHelper.benchOneBlockDevice,
+                        "intelcas":        mysqlHelper.benchCAS}
+BENCH_CASE_LIST = ["default", "disk", "intelcas"]
 
 def getBenchKwargs(benchCase, args):
     return {
         "default"       : {},
-        "bufferPoolSize": {},
-        "disk"          : {'blkDev': args.blkDev}, 
+        "disk"          : {'blkDev': args.blkDev},
+        "intelcas"      : {'caching': args.caching, 'core': args.core},
     } [benchCase]
     
 
@@ -46,6 +46,10 @@ def setupArgsParser():
                                                         "{0}".format(BENCH_CASE_LIST))
     arg_parser.add_argument('-blkDev', metavar='blockDevice', required=False, default='',
                             help="Specify block device you want to bench\n")
+    arg_parser.add_argument('-caching', metavar='cachingDev', required=False, default='',
+                            help="The caching device for intelcas\n")
+    arg_parser.add_argument('-core', metavar='coreDev', required=False, default='',
+                            help="The core device for intelcas\n")
 
     return 0
 
@@ -81,6 +85,10 @@ if __name__ == "__main__":
     logFileName = os.path.join(logMgr.getDataDir(), time.strftime("sysbench-Run-%Y-%m-%d-%Hh-%Mm.log"))
     logMgr.setUpRunningLog(logFileName)
     logMgr.info("\n\n")
+
+    print("Benchmark is running in progress..............")
+    print("You can get your log and perf data in: {0}".format(logMgr.getDataDir()))
+    taskCfg.showOpt()
     
     dbName = taskCfg.queryOpt("sysbench", "DB_NAME")
     pwd = taskCfg.queryOpt("sysbench", "PWD")
@@ -93,4 +101,6 @@ if __name__ == "__main__":
     benchTask = BENCH_CASE_TO_CLASS[args.bench](db, int(args.time))
     benchTask.startBench(kwargs = getBenchKwargs(args.bench, args))
 
+    logMgr.info("Successfully to complete the benchmark\n")
+    logMgr.info("You can get your performance data from: {0}\n".format(logMgr.getDataDir()))
     exit(0)

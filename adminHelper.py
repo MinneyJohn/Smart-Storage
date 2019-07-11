@@ -645,6 +645,7 @@ class taskCfg():
     
     @classmethod
     def showOpt(cls):
+        print("Your bench mark is configured as follows:")
         for section in cls.taskCfg:
             for opt in cls.taskCfg[section]:
-                print(cls.queryOpt(section, opt))
+                print("{0}: {1}".format(opt, cls.queryOpt(section, opt)))

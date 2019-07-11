@@ -258,7 +258,31 @@ class defaultBench():
                             "/usr/share/sysbench/oltp_write_only.lua"]
         self.threadsNumList  = [100] # TODO
         self.statsCycle = 5
+        self.dynamicBuffer = False
+    
+    def getBufferSizeList(self, totalMem, dbSize):
+        sizeSet = set()
+        start = 0
+        end   = int (dbSize * 0.2)
+        step  = int (dbSize * 0.2)
+
+        if totalMem > dbSize:
+            start = dbSize
+        else:
+            start = totalMem
+        if 0 == end:
+            end = 1
+        if 0 == step:
+            step = 1
         
+        curSize = start
+        while (curSize >= end):
+            sizeSet.add(curSize)
+            curSize -= step
+        
+        logMgr.debug("Will loop those buffer pool size: {0}".format(sizeSet))
+        return sorted(sizeSet)
+
     def getCustomerCfg(self):
         self.threadsNumList = []
         thread_num_list = taskCfg.queryOpt("sysbench", "THREAD_NUM_LIST")
@@ -273,6 +297,10 @@ class defaultBench():
         statsCycleCfg = taskCfg.queryOpt("sysbench", "STATS_CYCLE")
         if statsCycleCfg:
             self.statsCycle = int(statsCycleCfg)
+        
+        dynamicBuffer = taskCfg.queryOpt("sysbench", "DYNAMIC_BUFFER_POOL_SIZE")
+        if dynamicBuffer and ("TRUE" == dynamicBuffer.upper()):
+            self.dynamicBuffer = True
 
     def triggerSbTask(self):
         for threadNum in self.threadsNumList:
@@ -307,7 +335,22 @@ class defaultBench():
     # Need to redefine this for necessary
     def doSmartBench(self):
         # Trigger Sysbench Task
-        self.triggerSbTask()
+        if False == self.dynamicBuffer:
+            self.triggerSbTask()
+        else:
+            # Get the valid of buffer pool size list
+            totalMem = casAdmin.getTotalMemory()
+            dbSize = self.db.getSizeInGB()
+            logMgr.info("Size of DB is {0}GB, and total physical memory is {1}GB".format(dbSize, totalMem))
+            bufferSizeList = self.getBufferSizeList(totalMem, dbSize)
+
+            # Loop sysbench for each buffer size
+            for bufferSize in bufferSizeList:
+                logMgr.info("Change buffer_pool_size to {0}G".format(bufferSize))
+                mySqlCfg.changeOpt(self.db.instID, "innodb_buffer_pool_size", "{0}G".format(bufferSize))
+                mySqlInst.restart(self.db.instID)
+                self.triggerSbTask() 
+        return 0
 
     # No need to redefine
     def startBench(self, kwargs = {}):
@@ -320,47 +363,7 @@ class defaultBench():
 
         self.doSmartBench()
         return 0
-
-class benchBufferSize(defaultBench):
-    def getBufferSizeList(self, totalMem, dbSize):
-        sizeSet = set()
-        start = 0
-        end   = int (dbSize * 0.2)
-        step  = int (dbSize * 0.2)
-
-        if totalMem > dbSize:
-            start = dbSize
-        else:
-            start = totalMem
-        if 0 == end:
-            end = 1
-        if 0 == step:
-            step = 1
-        
-        curSize = start
-        while (curSize >= end):
-            sizeSet.add(curSize)
-            curSize -= step
-        
-        logMgr.debug("Will loop those buffer pool size: {0}".format(sizeSet))
-        return sorted(sizeSet)
-
-    def doSmartBench(self):
-        # Get the valid of buffer pool size list
-        totalMem = casAdmin.getTotalMemory()
-        dbSize = self.db.getSizeInGB()
-        logMgr.info("Size of DB is {0}GB, and total physical memory is {1}GB".format(dbSize, totalMem))
-        bufferSizeList = self.getBufferSizeList(totalMem, dbSize)
-
-        # Loop sysbench for each buffer size
-        for bufferSize in bufferSizeList:
-            logMgr.info("Change buffer_pool_size to {0}G".format(bufferSize))
-            mySqlCfg.changeOpt(self.db.instID, "innodb_buffer_pool_size", "{0}G".format(bufferSize))
-            mySqlInst.restart(self.db.instID)
-            self.triggerSbTask()
-        
-        return 0
-
+    
 class benchOneBlockDevice(defaultBench):
     def prepareSystem(self):
         if os.path.exists(self.db.dataDir):
@@ -412,6 +415,7 @@ class benchOneBlockDevice(defaultBench):
             self.blkDev = self.kwargs['blkDev']
         else:
             return 1
+        return 0
 
         # No need to redefine
     def startBench(self, kwargs = {}):
@@ -429,4 +433,48 @@ class benchOneBlockDevice(defaultBench):
         
         if self.clearSystem():
             logMgr.info("**ERROR** Failed to clear the system for the bench work")
+        return 0
+
+class benchCAS():
+    def __init__(self, db, time):
+        self.db   = db
+        self.time = time
+    
+    def handleKwargs(self, kwargs):
+        self.kwargs = kwargs
+        if "caching" in self.kwargs:
+            self.caching = self.kwargs['caching']
+        else:
+            return 1
+
+        if "core" in self.kwargs:
+            self.core = self.kwargs['core']
+        else:
+            return 1
+        
+        return 0
+
+    def startBench(self, kwargs = {}):
+        # Step 0: Fetch Caching and Core Device
+        if self.handleKwargs(kwargs):
+            logMgr.info("**ERROR** Plase input required parameters\n")
+            print("**ERROR** Plase input required parameters\n")
+            exit(1)
+
+        # Step 1: Bench Caching Dev
+        cachingBench = benchOneBlockDevice(self.db, self.time)
+        cachingBench.startBench(kwargs = {'blkDev': self.caching})
+
+        # Step 2: Bench Core Dev
+        coreBench = benchOneBlockDevice(self.db, self.time)
+        coreBench.startBench(kwargs = {'blkDev': self.core})
+
+        # Step 3: Bench CAS Dev
+        ## Configure CAS
+        casAdmin.cfgCacheCorePair(self.caching, self.core)
+        self.casDisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+        if self.casDisk:
+            casBench = benchOneBlockDevice(self.db, self.time)
+            casBench.startBench(kwargs = {'blkDev': self.casDisk})
+
         return 0
