@@ -50,6 +50,7 @@ def setupArgsParser():
                             help="The caching device for intelcas\n")
     arg_parser.add_argument('-core', metavar='coreDev', required=False, default='',
                             help="The core device for intelcas\n")
+    arg_parser.add_argument('-debug', help="Enable debug mode\n", action="store_true")
 
     return 0
 
@@ -84,12 +85,13 @@ if __name__ == "__main__":
     logMgr.setDataDir(args.output)
     logFileName = os.path.join(logMgr.getDataDir(), time.strftime("sysbench-Run-%Y-%m-%d-%Hh-%Mm.log"))
     logMgr.setUpRunningLog(logFileName)
+    logMgr.setDebug(args.debug)
     logMgr.info("\n\n")
 
     print("Benchmark is running in progress..............")
     print("You can get your log and perf data in: {0}".format(logMgr.getDataDir()))
     taskCfg.showOpt()
-    
+
     dbName = taskCfg.queryOpt("sysbench", "DB_NAME")
     pwd = taskCfg.queryOpt("sysbench", "PWD")
     if "" == dbName:
