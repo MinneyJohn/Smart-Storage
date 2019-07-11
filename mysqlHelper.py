@@ -413,6 +413,7 @@ class benchOneBlockDevice(defaultBench):
         self.kwargs = kwargs
         if "blkDev" in self.kwargs:
             self.blkDev = self.kwargs['blkDev']
+            logMgr.info("Will run sysbench against block device {0}".format(self.blkDev))
         else:
             return 1
         return 0
