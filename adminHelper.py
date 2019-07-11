@@ -405,13 +405,30 @@ class casAdmin():
         return ret
     
     # TODO
-    def getTotalMemory(self):
+    @classmethod
+    def getTotalMemory(cls):
         checkCmd = "vmstat -s|grep \"total memory\"|awk '{print $1}'"
         (ret, memory_in_kb) = casAdmin.getOutPutOfCmd(checkCmd)
         memory_in_GB = int(int(memory_in_kb) / 1024 / 1024)
         logMgr.debug("There are {0}G physical memory in total".format(memory_in_GB))
         return memory_in_GB
-        
+    
+    '''
+    [root@sm114 2019_07_10_22h_14m]# df /mnt/qlc-sql/sbtest
+    Filesystem      1K-blocks      Used  Available Use% Mounted on
+    /dev/nvme0n1   7442192600 111097936 6956004984   2% /mnt/qlc-sql
+    '''
+    @classmethod
+    def getBlockDevice(cls, dataDir):
+        checkCmd = "df {0}".format(dataDir)
+        (ret, dfOut) = casAdmin.getOutPutOfCmd(checkCmd)
+        if 0 == ret and dfOut:
+            lines = dfOut.splitlines()
+            if (2 == len(lines)):
+                line = lines[1]
+                words = line.split()
+                return words[0]
+        return ""
 '''
 This class is used for access/change the mysql configuration file my.cnf
 '''
@@ -486,7 +503,7 @@ class mySqlInst():
         datadir = mySqlCfg.queryOpt(instID, "datadir")
         logMgr.info("Initial mysql instance {0} with dataDir {1}".format(instID, datadir))
         if ("" == datadir):
-            return 0
+            return -1
 
         (ret, output) = casAdmin.getOutPutOfCmd("sudo mkdir -p {0}".format(datadir))
         if (ret):

@@ -5,7 +5,7 @@ import os
 import datetime
 import logging
 
-DEBUG_MODE = False
+DEBUG_MODE = True
 
 class logMgr():
     logName = ""

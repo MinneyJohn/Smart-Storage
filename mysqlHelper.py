@@ -64,12 +64,6 @@ class dataBase():
 
         return size_in_GB
 
-    # TODO
-    def getBlockDevice(self):
-        command = "lsblk | grep {0} | awk '{{print $1}}'".format(self.dataDir)
-        (ret, blkDevice) = casAdmin.getOutPutOfCmd(command)
-        return blkDevice
-
 '''
 This class is an abstract of one sysbench task:
 * Support prepare/run/clear
@@ -202,7 +196,12 @@ class sysbenchTask():
                 
             # Step 3: Start iostats collection
             # If it is a CAS drive, also collect caching/core device
-            blkDevice = self.db.getBlockDevice()
+            blkDevice = casAdmin.getBlockDevice(self.db.dataDir)
+            if "" == blkDevice:
+                logMgr.info("**ERROR** Could NOT find the block device for {0}\n".format(self.db.dataDir))
+                print("**ERROR** Could NOT find the block device for {0}\n".format(self.db.dataDir))
+                exit(1)
+
             (cacheID, coreID) = casAdmin.getCacheCoreIdByDevName(blkDevice)
             if (INVALID_CACHE_ID == cacheID):
                 ioStat = ioStats(self.opt["report-interval"], \
@@ -294,13 +293,16 @@ class defaultBench():
         self.getCustomerCfg()
 
         # Startup the cache instance
-        mySqlInst.genesis(self.db.instID)
+        if mySqlInst.genesis(self.db.instID):
+            return -1
     
         # Create dataBase
-        self.db.createDB()
+        if self.db.createDB():
+            return -1
 
         # Prepare Data
-        self.db.prepareData()        
+        if self.db.prepareData():
+            return -1       
 
     # Need to redefine this for necessary
     def doSmartBench(self):
@@ -313,7 +315,9 @@ class defaultBench():
         if self.handleKwargs(kwargs):
             logMgr.info("**ERROR** Do not find expected smart args for this job\n")
             exit(0)
-        self.prepareBench()
+        if self.prepareBench():
+            return -1
+
         self.doSmartBench()
         return 0
 
