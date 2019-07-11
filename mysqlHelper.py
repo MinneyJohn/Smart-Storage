@@ -249,100 +249,6 @@ class sysbenchTask():
         logMgr.info("End of sysbench Task: {0}\n".format(self.sbTask))
         return 0    
     
-class benchBufferSize:
-    def __init__(self, db, time = 600):
-        self.time = time
-        self.db   = db
-
-        self.sbTaskList = ["/usr/share/sysbench/oltp_read_write.lua",\
-                            "/usr/share/sysbench/oltp_read_only.lua",\
-                            "/usr/share/sysbench/oltp_write_only.lua"]
-        self.threadsNumList = [100]
-        self.statsCycle = 5
-    
-    def triggerAllTask(self):
-        for threadNum in self.threadsNumList:
-            for sbTask in self.sbTaskList:   
-                sbRunTask = sysbenchTask(self.db, sbTask, self.time, action="run")
-                sbRunTask.setOpt("threads", threadNum)
-                sbRunTask.setOpt("report-interval", self.statsCycle)
-                sbRunTask.trigger()
-        return 0
-
-    def getCustomerCfg(self):
-        self.threadsNumList = []
-        thread_num_list = taskCfg.queryOpt("sysbench", "THREAD_NUM_LIST")
-        if thread_num_list:
-            words = re.split(",", thread_num_list)
-            for word in words:
-                self.threadsNumList.append(int(word))
-        else:
-            self.threadsNumList = [100]
-
-        self.statsCycle = 5
-        statsCycleCfg = taskCfg.queryOpt("sysbench", "STATS_CYCLE")
-        if statsCycleCfg:
-            self.statsCycle = int(statsCycleCfg)
-
-    def getBufferSizeList(self, totalMem, dbSize):
-        sizeSet = set()
-        start = 0
-        end   = int (dbSize * 0.2)
-        step  = int (dbSize * 0.2)
-
-        if totalMem > dbSize:
-            start = dbSize
-        else:
-            start = totalMem
-        if 0 == end:
-            end = 1
-        if 0 == step:
-            step = 1
-        
-        curSize = start
-        while (curSize >= end):
-            sizeSet.add(curSize)
-            curSize -= step
-        
-        logMgr.debug("Will loop those buffer pool size: {0}".format(sizeSet))
-        return sorted(sizeSet)
-
-    # TODO
-    def getTotalMemory(self):
-        checkCmd = "vmstat -s|grep \"total memory\"|awk '{print $1}'"
-        (ret, memory_in_kb) = casAdmin.getOutPutOfCmd(checkCmd)
-        memory_in_GB = int(int(memory_in_kb) / 1024 / 1024)
-        logMgr.debug("There are {0}G physical memory in total".format(memory_in_GB))
-        return memory_in_GB
-
-    def startBench(self):
-        # Get the customer configuration
-        self.getCustomerCfg()
-
-        # Startup the cache instance
-        mySqlInst.genesis(self.db.instID)
-    
-        # Create dataBase
-        self.db.createDB()
-
-        # Prepare Data
-        self.db.prepareData()
-
-        # Get the valid of buffer pool size list
-        totalMem = self.getTotalMemory()
-        dbSize = self.db.getSizeInGB()
-        logMgr.info("Size of DB is {0}GB, and total physical memory is {1}GB".format(dbSize, totalMem))
-        bufferSizeList = self.getBufferSizeList(totalMem, dbSize)
-
-        # Loop sysbench for each buffer size
-        for bufferSize in bufferSizeList:
-            logMgr.info("Change buffer_pool_size to {0}G".format(bufferSize))
-            mySqlCfg.changeOpt(self.db.instID, "innodb_buffer_pool_size", "{0}G".format(bufferSize))
-            mySqlInst.restart(self.db.instID)
-            self.triggerAllTask()
-        
-        return 0
-
 class defaultBench():
     def __init__(self, db, time):
         self.db   = db
@@ -369,7 +275,21 @@ class defaultBench():
         if statsCycleCfg:
             self.statsCycle = int(statsCycleCfg)
 
-    def startBench(self):
+    def triggerSbTask(self):
+        for threadNum in self.threadsNumList:
+            for sbTask in self.sbTaskList:    
+                sbRunTask = sysbenchTask(self.db, sbTask, self.time, action="run")
+                sbRunTask.setOpt("threads", threadNum)
+                sbRunTask.setOpt("report-interval", self.statsCycle)
+                sbRunTask.trigger()
+
+    # Need to redefine if necessary
+    def handleKwargs(self, kwargs):
+        self.kwargs = kwargs
+        return 0
+
+    # No need to redefine
+    def prepareBench(self):
         #Read the customer configuration
         self.getCustomerCfg()
 
@@ -380,13 +300,129 @@ class defaultBench():
         self.db.createDB()
 
         # Prepare Data
-        self.db.prepareData()
+        self.db.prepareData()        
 
-        for threadNum in self.threadsNumList:
-            for sbTask in self.sbTaskList:    
-                sbRunTask = sysbenchTask(self.db, sbTask, self.time, action="run")
-                sbRunTask.setOpt("threads", threadNum)
-                sbRunTask.setOpt("report-interval", self.statsCycle)
-                sbRunTask.trigger()
+    # Need to redefine this for necessary
+    def doSmartBench(self):
+        # Trigger Sysbench Task
+        self.triggerSbTask()
 
+    # No need to redefine
+    def startBench(self, kwargs = {}):
+        # Must Handle kwargs first, at the args might be needed from the beginning
+        if self.handleKwargs(kwargs):
+            logMgr.info("**ERROR** Do not find expected smart args for this job\n")
+            exit(0)
+        self.prepareBench()
+        self.doSmartBench()
+        return 0
+
+class benchBufferSize(defaultBench):
+    def getBufferSizeList(self, totalMem, dbSize):
+        sizeSet = set()
+        start = 0
+        end   = int (dbSize * 0.2)
+        step  = int (dbSize * 0.2)
+
+        if totalMem > dbSize:
+            start = dbSize
+        else:
+            start = totalMem
+        if 0 == end:
+            end = 1
+        if 0 == step:
+            step = 1
+        
+        curSize = start
+        while (curSize >= end):
+            sizeSet.add(curSize)
+            curSize -= step
+        
+        logMgr.debug("Will loop those buffer pool size: {0}".format(sizeSet))
+        return sorted(sizeSet)
+
+    def doSmartBench(self):
+        # Get the valid of buffer pool size list
+        totalMem = casAdmin.getTotalMemory()
+        dbSize = self.db.getSizeInGB()
+        logMgr.info("Size of DB is {0}GB, and total physical memory is {1}GB".format(dbSize, totalMem))
+        bufferSizeList = self.getBufferSizeList(totalMem, dbSize)
+
+        # Loop sysbench for each buffer size
+        for bufferSize in bufferSizeList:
+            logMgr.info("Change buffer_pool_size to {0}G".format(bufferSize))
+            mySqlCfg.changeOpt(self.db.instID, "innodb_buffer_pool_size", "{0}G".format(bufferSize))
+            mySqlInst.restart(self.db.instID)
+            self.triggerSbTask()
+        
+        return 0
+
+class benchOneBlockDevice(defaultBench):
+    def prepareSystem(self):
+        if os.path.exists(self.db.dataDir):
+            logMgr.info("**ERROR* The dataDir exists, please choose a non-existing dir\n".format(self.db.dataDir))
+            print("Dangerous, {0} exists, please remove it first\n".format(self.db.dataDir))
+            exit(0)
+        
+        if casAdmin.isBlkMounted(self.blkDev):
+            logMgr.info("**ERROR* Block Device Still Mounted: {0}".format(self.blkDev))
+            print("**ERROR* Block Device Still Mounted: {0}".format(self.blkDev))
+            exit(0)
+        
+        # mkfs on blkDev
+        fsType = casAdmin.getBlkFSType(self.blkDev)
+        if "" == fsType:
+            ret = casAdmin.mkFS(self.blkDev, "ext4")
+            if ret:
+                return ret
+        
+        #Create Dir
+        mkdev = "mkdir -p {0}".format(self.db.dataDir)
+        (ret, output) = casAdmin.getOutPutOfCmd(mkdev)
+        if ret:
+            return ret
+        
+        # Mount blkDev to target Dir
+        ret = casAdmin.doMount(self.blkDev, self.db.dataDir)
+        if ret:
+            return ret
+    
+    def clearSystem(self):
+        # Stop MySQL Instance First
+        mySqlInst.stop(self.db.instID)
+
+        # Unmount the dataDir
+        ret = casAdmin.doUnMount(self.db.dataDir)
+        if (ret):
+            return ret
+        
+        # Remove the datadir
+        command = "rm -fr {0}".format(self.db.dataDir)
+        (ret, output) = casAdmin.getOutPutOfCmd(command)
+
+        return ret
+
+    def handleKwargs(self, kwargs):
+        self.kwargs = kwargs
+        if "blkDev" in self.kwargs:
+            self.blkDev = self.kwargs['blkDev']
+        else:
+            return 1
+
+        # No need to redefine
+    def startBench(self, kwargs = {}):
+        # Must Handle kwargs first, at the args might be needed from the beginning
+        if self.handleKwargs(kwargs):
+            logMgr.info("**ERROR** Do not find expected smart args for this job\n")
+            exit(0)
+        
+        if self.prepareSystem():
+            logMgr.info("**ERROR** Failed to prepare the system for the bench work\n")
+            exit(0)
+        
+        self.prepareBench()
+        self.doSmartBench()
+        
+        if self.clearSystem():
+            logMgr.info("**ERROR** Failed to clear the system for the bench work")
         return 0

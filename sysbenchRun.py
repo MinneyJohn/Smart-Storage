@@ -16,8 +16,18 @@ from statsHelper import *
 import mysqlHelper
 
 BENCH_CASE_TO_CLASS = {"default":          mysqlHelper.defaultBench,
-                        "bufferPoolSize":  mysqlHelper.benchBufferSize }
-BENCH_CASE_LIST = ["default", "bufferPoolSize"]
+                        "bufferPoolSize":  mysqlHelper.benchBufferSize,
+                        "disk":            mysqlHelper.benchOneBlockDevice}
+BENCH_CASE_LIST = ["default", "bufferPoolSize", "disk"]
+
+def getBenchKwargs(benchCase, args):
+    return {
+        "default"       : {},
+        "bufferPoolSize": {},
+        "disk"          : {'blkDev': args.blkDev}, 
+    } [benchCase]
+    
+
 
 def setupArgsParser():
     global arg_parser
@@ -34,6 +44,8 @@ def setupArgsParser():
     arg_parser.add_argument('-bench', metavar='benchTask', required=False, default='default',
                             choices=BENCH_CASE_LIST, help="You can choose one bench task to run:\n"\
                                                         "{0}".format(BENCH_CASE_LIST))
+    arg_parser.add_argument('-blkDev', metavar='blockDevice', required=False, default='',
+                            help="Specify block device you want to bench\n")
 
     return 0
 
@@ -47,6 +59,11 @@ def verifyArgs(args):
     except:
         print("Please make sure inst/tables/rows be integer\n")
         exit(1)
+    
+    if "disk" == args.bench:
+        if "" == args.blkDev:
+            print("Please specify the blockdevice if you want to bench\n")
+            exit(1)
     
     if (False == os.path.isdir(args.output)):
         print("Please make sure dir {0} exist".format(args.output))
@@ -74,6 +91,6 @@ if __name__ == "__main__":
     db = mysqlHelper.dataBase(int(args.inst), dbName, pwd, int(args.tables), int(args.rows))
 
     benchTask = BENCH_CASE_TO_CLASS[args.bench](db, int(args.time))
-    benchTask.startBench()
+    benchTask.startBench(kwargs = getBenchKwargs(args.bench, args))
 
     exit(0)

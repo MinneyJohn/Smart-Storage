@@ -430,7 +430,8 @@ class cpuUsageStats(longRunStatsCollector):
                 if ("" == header):
                     header = word
                 else:
-                    header = "{0}, {1}\n".format(header, word)
+                    header = "{0}, {1}".format(header, word)
+            header = "{0}\n".format(header)
             outF = open(self.getCsvFile(), "w+")
             outF.writelines(header)
             outF.close()
@@ -455,8 +456,8 @@ class cpuUsageStats(longRunStatsCollector):
                 if ("" == csvLine):
                     csvLine = word
                 else:
-                    csvLine = "{0}, {1}\n".format(csvLine, word)
-            return csvLine
+                    csvLine = "{0}, {1}".format(csvLine, word)
+            return "{0}\n".format(csvLine)
         return ""
 
     def generateRunCommand(self):

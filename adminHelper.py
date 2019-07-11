@@ -342,7 +342,76 @@ class casAdmin():
                 return dataS[index]
             index += 1
         return ""
+    
+    '''
+    [root@sm114 Smart-Storage]# blkid -po udev /dev/nvme1n1
+    ID_FS_UUID=3efeab2b-f08a-46bc-aa9d-82186a4dfa58
+    ID_FS_UUID_ENC=3efeab2b-f08a-46bc-aa9d-82186a4dfa58
+    ID_FS_VERSION=1.0
+    ID_FS_TYPE=ext4
+    ID_FS_USAGE=filesystem
+    '''
+    @classmethod
+    def getBlkFSType(cls, blkDev):
+        fullPath = cls.getBlkFullPath(blkDev)
+        command = "blkid -po udev {0} | grep ID_FS_TYPE".format(fullPath)
+        (ret, output) = cls.getOutPutOfCmd(command)
+        if (0 == ret and output):
+            lines = output.splitlines()
+            words = lines[0].split("=")
+            return words[1]
+        return ""
+    
+    @classmethod
+    def getBlkFullPath(cls, blkDev):
+        return os.path.join("/dev", os.path.basename(blkDev))
 
+    '''
+    [root@sm114 ~]# mount -l | grep nvme1n1
+    /dev/nvme1n1 on /mnt/optane-sql type ext4 (rw,relatime,data=ordered)
+    '''
+    @classmethod
+    def isBlkMounted(cls, blkDev):
+        baseDev = os.path.basename(blkDev)
+        command = "mount -l | grep {0}".format(baseDev)
+        (ret, output) = cls.getOutPutOfCmd(command)
+        if ret:
+            return False
+        if output:
+            lines = output.splitlines()
+            for line in lines:
+                if baseDev in line:
+                    words = line.split()
+                    if baseDev == os.path.basename(words[0]):
+                        return True
+        return False
+    
+    @classmethod
+    def mkFS(cls, blkDev, fsType):
+        command = "mkfs.{0} {1}".format(fsType, cls.getBlkFullPath(blkDev))
+        (ret, output) = cls.getOutPutOfCmd(command)
+        return ret
+
+    @classmethod
+    def doMount(cls, blkDev, mountPoint):
+        command = "mount {0} {1}".format(cls.getBlkFullPath(blkDev), mountPoint)
+        (ret, output) = cls.getOutPutOfCmd(command)
+        return ret
+    
+    @classmethod
+    def doUnMount(cls, mountPoint):
+        command = "umount {0}".format(mountPoint)
+        (ret, output) = cls.getOutPutOfCmd(command)
+        return ret
+    
+    # TODO
+    def getTotalMemory(self):
+        checkCmd = "vmstat -s|grep \"total memory\"|awk '{print $1}'"
+        (ret, memory_in_kb) = casAdmin.getOutPutOfCmd(checkCmd)
+        memory_in_GB = int(int(memory_in_kb) / 1024 / 1024)
+        logMgr.debug("There are {0}G physical memory in total".format(memory_in_GB))
+        return memory_in_GB
+        
 '''
 This class is used for access/change the mysql configuration file my.cnf
 '''
@@ -394,6 +463,12 @@ class mySqlInst():
         (ret, output) = casAdmin.getOutPutOfCmd(restartCmd)
         return ret
     
+    @classmethod
+    def stop(cls, instID):
+        stopCmd = "systemctl stop mysqld@{0}".format(instID)
+        (ret, output) = casAdmin.getOutPutOfCmd(stopCmd)
+        return ret
+
     @classmethod
     def executeSqlStsm(cls, instID, stsm, pwd=""):
         sock = mySqlCfg.queryOpt(instID, "socket")
