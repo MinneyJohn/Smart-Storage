@@ -26,7 +26,7 @@ class MyTimeStamp():
     
     @classmethod
     def getAppendTime(cls):
-        return datetime.datetime.now().strftime("%Y_%m_%d_%H_%M")
+        return datetime.datetime.now().strftime("%Y_%m_%d_%Hh_%Mm")
     
     # Used to get the timestamp with seconds or minutes
     # By default, it is by minute

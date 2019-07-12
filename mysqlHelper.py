@@ -112,7 +112,7 @@ class sysbenchTask():
         workShort = os.path.basename(self.sbTask).replace(".lua", "")
         threads = self.opt["threads"]
         timeStamp = MyTimeStamp.getAppendTime()
-        fileName = "sysbench.{0}.{1}.{2}thds.{3}".format(self.db.name, workShort, threads, timeStamp)
+        fileName = "{0}.{1}thds.{2}".format(workShort, threads, timeStamp)
         self.resultFile = os.path.join(logMgr.getDataDir(), fileName)
         return self.resultFile
     
@@ -129,7 +129,8 @@ class sysbenchTask():
         workShort = os.path.basename(self.sbTask).replace(".lua", "")
         threads = self.opt["threads"]
         timeStamp = MyTimeStamp.getAppendTime()
-        fileName = "sysbench.{0}.{1}.{2}thds.{3}.csv".format(self.db.name, workShort, threads, timeStamp)
+        bufferPool = mySqlCfg.queryOpt(self.db.instID, "innodb_buffer_pool_size")
+        fileName = "{0}.{1}thds.{2}.{3}.csv".format(workShort, threads, bufferPool, timeStamp)
         self.csvFile = os.path.join(logMgr.getDataDir(), fileName)
         self.writeHeader()
         return self.csvFile
@@ -263,12 +264,13 @@ class defaultBench():
         self.validWorkload = ["/usr/share/sysbench/oltp_read_write.lua",\
                             "/usr/share/sysbench/oltp_read_only.lua",\
                             "/usr/share/sysbench/oltp_write_only.lua"]
+        self.memStep = 0.2
     
     def getBufferSizeList(self, totalMem, dbSize):
         sizeSet = set()
         start = 0
-        end   = int (dbSize * 0.2)
-        step  = int (dbSize * 0.2)
+        end   = int (dbSize * self.memStep)
+        step  = int (dbSize * self.memStep)
 
         if totalMem > dbSize:
             start = dbSize
@@ -306,6 +308,10 @@ class defaultBench():
         if dynamicBuffer and ("TRUE" == dynamicBuffer.upper()):
             self.dynamicBuffer = True
         
+        memStep = taskCfg.queryOpt("sysbench", "BUFFER_CHANGE_STEP")
+        if memStep and (float(memStep) < 1):
+            self.memStep = float(memStep)
+
         workLoadListStr = taskCfg.queryOpt("sysbench", "WORK_LOAD")
         if workLoadListStr:
             self.sbTaskList = []

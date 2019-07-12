@@ -4,6 +4,7 @@ STATS_CYCLE=5
 DB_NAME=sbtest
 PWD=intel123
 DYNAMIC_BUFFER_POOL_SIZE=True
+BUFFER_CHANGE_STEP=0.1
 WORK_LOAD=/usr/share/sysbench/oltp_read_write.lua
 
 #If you want to try multiple threads
