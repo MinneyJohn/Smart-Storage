@@ -447,6 +447,9 @@ class mySqlCfg():
             cls.sqlCfg[section][optName] = optValue
         else: # For option without value
             cls.sqlCfg[section][optName] = None
+        with open("/etc/my.cnf", "w") as configfile:
+            cls.sqlCfg.write(configfile)
+            configfile.close()
     
     @classmethod
     def removeOpt(cls, instID, optName):

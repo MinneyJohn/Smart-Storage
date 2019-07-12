@@ -462,6 +462,7 @@ class benchCAS():
             print("**ERROR** Plase input required parameters\n")
             exit(1)
 
+        '''
         # Step 1: Bench Caching Dev
         cachingBench = benchOneBlockDevice(self.db, self.time)
         cachingBench.startBench(kwargs = {'blkDev': self.caching})
@@ -469,6 +470,7 @@ class benchCAS():
         # Step 2: Bench Core Dev
         coreBench = benchOneBlockDevice(self.db, self.time)
         coreBench.startBench(kwargs = {'blkDev': self.core})
+        '''
 
         # Step 3: Bench CAS Dev
         ## Configure CAS
