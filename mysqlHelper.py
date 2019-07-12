@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/python3
 
 import threading
 import time
@@ -259,6 +259,10 @@ class defaultBench():
         self.threadsNumList  = [100] # TODO
         self.statsCycle = 5
         self.dynamicBuffer = False
+
+        self.validWorkload = ["/usr/share/sysbench/oltp_read_write.lua",\
+                            "/usr/share/sysbench/oltp_read_only.lua",\
+                            "/usr/share/sysbench/oltp_write_only.lua"]
     
     def getBufferSizeList(self, totalMem, dbSize):
         sizeSet = set()
@@ -301,6 +305,14 @@ class defaultBench():
         dynamicBuffer = taskCfg.queryOpt("sysbench", "DYNAMIC_BUFFER_POOL_SIZE")
         if dynamicBuffer and ("TRUE" == dynamicBuffer.upper()):
             self.dynamicBuffer = True
+        
+        workLoadListStr = taskCfg.queryOpt("sysbench", "WORK_LOAD")
+        if workLoadListStr:
+            self.sbTaskList = []
+            loadList = re.split(",", workLoadListStr)
+            for load in loadList:
+                if load in self.validWorkload:
+                    self.sbTaskList.append(load)
 
     def triggerSbTask(self):
         for threadNum in self.threadsNumList:
@@ -453,6 +465,10 @@ class benchCAS():
         else:
             return 1
         
+        if False == casAdmin.isCacheCoreClear(self.caching, self.core):
+            logMgr.info("**ERROR** Already configure intelcas on {0} or {1}".format(self.caching, self.core))
+            return 1
+
         return 0
 
     def startBench(self, kwargs = {}):
@@ -462,7 +478,6 @@ class benchCAS():
             print("**ERROR** Plase input required parameters\n")
             exit(1)
 
-        '''
         # Step 1: Bench Caching Dev
         cachingBench = benchOneBlockDevice(self.db, self.time)
         cachingBench.startBench(kwargs = {'blkDev': self.caching})
@@ -470,14 +485,17 @@ class benchCAS():
         # Step 2: Bench Core Dev
         coreBench = benchOneBlockDevice(self.db, self.time)
         coreBench.startBench(kwargs = {'blkDev': self.core})
-        '''
-
+    
         # Step 3: Bench CAS Dev
         ## Configure CAS
-        casAdmin.cfgCacheCorePair(self.caching, self.core)
-        self.casDisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+        casAdmin.cfgCacheCorePair(casAdmin.getBlkFullPath(self.caching), casAdmin.getBlkFullPath(self.core))
+        self.casDisk = casAdmin.getIntelDiskByCoreDev(casAdmin.getBlkFullPath(self.core))
         if self.casDisk:
             casBench = benchOneBlockDevice(self.db, self.time)
             casBench.startBench(kwargs = {'blkDev': self.casDisk})
+        
+        # Step 3.1: Stop CAS Cache Instance
+        cacheID = casAdmin.getIdByCacheDev(casAdmin.getBlkFullPath(self.caching))
+        casAdmin.stopCacheInstance(cacheID)
 
         return 0

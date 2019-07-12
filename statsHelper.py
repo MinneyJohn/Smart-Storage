@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/python3
 
 import subprocess
 import threading
@@ -127,7 +127,7 @@ class casPerfStats(cycleStatsCollector):
         if "cacheID" not in self._kwargs_parse:
             return ""
 
-        cacheID = kwargs['cacheID']
+        cacheID = self._kwargs_parse['cacheID']
         (dateStr, timeStr) = MyTimeStamp.getDateAndTime(SECOND)
         new_line = "{0}, {1}, {2}, {3}\n".format(dateStr, timeStr, cacheID, line)
         return new_line

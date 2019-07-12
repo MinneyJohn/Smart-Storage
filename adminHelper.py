@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/python3
 import subprocess
 import threading
 import time
@@ -168,7 +168,7 @@ class casAdmin():
     def getIdByCacheDev(cls, cacheDev):
         (cache_instance_list, cache_volume_list) = cls.fetchCacheVolumeSet()
         for cache_instance in cache_instance_list:
-            if (cache_instance.cacheDisk == cacheDev):
+            if (cls.getBlkFullPath(cache_instance.cacheDisk) == cls.getBlkFullPath(cacheDev)):
                 return cache_instance.cacheID
         return INVALID_CACHE_ID
 
