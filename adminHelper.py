@@ -202,8 +202,8 @@ class casAdmin():
     @classmethod
     def getOutPutOfCmd(cls, commandStr):
         try:
-            output = subprocess.check_output(commandStr, shell=True)
             logMgr.debug("Plan to run: {0}".format(commandStr))
+            output = subprocess.check_output(commandStr, shell=True)
             return (0, output.decode().strip(" ").rstrip(" \n"))
         except:
             logMgr.info("**Exception** {0}".format(commandStr))
