@@ -229,15 +229,18 @@ class mysqlBufferPoolStats(cycleStatsCollector):
                                         .format(MyTimeStamp.getAppendTime()))
         targetHeaderFileName = os.path.join(logMgr.getDataDir(), "bufferPoolStatsHeader.csv")
 
-        headerStsm = "SELECT column_name FROM information_schema.columns WHERE table_schema = 'information_schema' "\
-                     " AND table_name = 'INNODB_BUFFER_POOL_STATS' INTO OUTFILE '{0}'"\
-                     .format(tmpHeaderFileName)
-        (ret, output) = mySqlInst.executeSqlStsm(self._instID, headerStsm, self._pwd)
-        if (1 == ret):
-            return False
-        shutil.move(tmpHeaderFileName, targetHeaderFileName)
-        # os.rename(tmpHeaderFileName, targetHeaderFileName)
-        self.convertHeaderToCSV(targetHeaderFileName)
+        # TODO - if already created the header file before, just use it
+        # There is a bug now, regenerate the headers are NOT correct
+        if False == os.path.exists(targetHeaderFileName):
+            headerStsm = "SELECT column_name FROM information_schema.columns WHERE table_schema = 'information_schema' "\
+                        " AND table_name = 'INNODB_BUFFER_POOL_STATS' INTO OUTFILE '{0}'"\
+                        .format(tmpHeaderFileName)
+            (ret, output) = mySqlInst.executeSqlStsm(self._instID, headerStsm, self._pwd)
+            if (1 == ret):
+                return False
+            shutil.move(tmpHeaderFileName, targetHeaderFileName)
+            # os.rename(tmpHeaderFileName, targetHeaderFileName)
+            self.convertHeaderToCSV(targetHeaderFileName)
 
         header_fh = open(targetHeaderFileName, "r")
         header_lines = header_fh.read().splitlines()
