@@ -17,17 +17,18 @@ import mysqlHelper
 
 BENCH_CASE_TO_CLASS = {"default":          mysqlHelper.defaultBench,
                         "disk":            mysqlHelper.benchOneBlockDevice,
-                        "intelcas":        mysqlHelper.benchCAS}
-BENCH_CASE_LIST = ["default", "disk", "intelcas"]
+                        "intelcas":        mysqlHelper.benchCAS,
+                        "disklist":        mysqlHelper.benchMultipleBlkDevice}
+BENCH_CASE_LIST = ["default", "disk", "intelcas", "disklist"]
 
 def getBenchKwargs(benchCase, args):
     return {
         "default"       : {},
         "disk"          : {'blkDev': args.blkDev},
         "intelcas"      : {'caching': args.caching, 'core': args.core},
+        "disklist"      : {'blkList': args.blkList},
     } [benchCase]
     
-
 
 def setupArgsParser():
     global arg_parser
@@ -50,7 +51,10 @@ def setupArgsParser():
                             help="The caching device for intelcas\n")
     arg_parser.add_argument('-core', metavar='coreDev', required=False, default='',
                             help="The core device for intelcas\n")
+    arg_parser.add_argument('-blkList', metavar='blklist', required=False, default='',
+                            help="The list of block drives to bench\n")
     arg_parser.add_argument('-debug', help="Enable debug mode\n", action="store_true")
+        
 
     return 0
 

@@ -516,3 +516,37 @@ class benchCAS():
         casAdmin.stopCacheInstance(cacheID)
 
         return 0
+
+class benchMultipleBlkDevice():
+def __init__(self, db, time):
+        self.db   = db
+        self.time = time
+    
+    def handleKwargs(self, kwargs):
+        self.kwargs = kwargs
+        if "blkList" in self.kwargs:
+            self.blkDev = []
+            blkListStr = self.kwargs['blkList']
+            blkListStr = re.sub("\s+", "", blkListStr)
+            words = blkListStr.split(",")
+            for word in words:
+                self.blkDev.append(word)
+        else:
+            return 1
+
+        return 0
+
+    def startBench(self, kwargs = {}):
+        # Step 0: Fetch Caching and Core Device
+        if self.handleKwargs(kwargs):
+            logMgr.info("**ERROR** Plase input required parameters\n")
+            print("**ERROR** Plase input required parameters\n")
+            exit(1)
+        
+        for blkDev in self.blkList:
+            print("Will bench {0}".format(blkDev))
+            '''
+            oneDiskBench = benchOneBlockDevice(self.db, self.time)
+            oneDiskBench.startBench(kwargs = {'blkDev': blkDev})
+            '''
+        return 0
