@@ -524,13 +524,13 @@ class benchMultipleBlkDevice():
     
     def handleKwargs(self, kwargs):
         self.kwargs = kwargs
+        self.blkList = []
         if "blkList" in self.kwargs:
-            self.blkDev = []
             blkListStr = self.kwargs['blkList']
             blkListStr = re.sub("\s+", "", blkListStr)
             words = blkListStr.split(",")
             for word in words:
-                self.blkDev.append(word)
+                self.blkList.append(word)
         else:
             return 1
 
