@@ -265,6 +265,7 @@ class defaultBench():
                             "/usr/share/sysbench/oltp_read_only.lua",\
                             "/usr/share/sysbench/oltp_write_only.lua"]
         self.memStep = 0.2
+        self.etraMemList = []
     
     def getBufferSizeList(self, totalMem, dbSize):
         sizeSet = set()
@@ -286,6 +287,9 @@ class defaultBench():
             sizeSet.add(curSize)
             curSize -= step
         
+        for extraMem in self.etraMemList:
+            sizeSet.add(extraMem)
+
         logMgr.debug("Will loop those buffer pool size: {0}".format(sizeSet))
         return sorted(sizeSet)
 
@@ -311,7 +315,14 @@ class defaultBench():
         memStep = taskCfg.queryOpt("sysbench", "BUFFER_CHANGE_STEP")
         if memStep and (float(memStep) < 1):
             self.memStep = float(memStep)
-
+        
+        self.etraMemList = []
+        etraMemListStr = taskCfg.queryOpt("sysbench", "EXTRA_MEM_LIST")
+        if etraMemListStr:
+            words = re.split(",", etraMemListStr)
+            for word in words:
+                self.etraMemList.append(int(word))
+        
         workLoadListStr = taskCfg.queryOpt("sysbench", "WORK_LOAD")
         if workLoadListStr:
             self.sbTaskList = []

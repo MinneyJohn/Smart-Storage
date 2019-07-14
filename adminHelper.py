@@ -576,7 +576,7 @@ class mySqlInst():
 
 # This class is used to run the scheduleTask    
 class scheduleTask():
-    def __init__(self, function, cycle, totalRun, args=[], kwargs={}):
+    def __init__(self, function, cycle, totalRun, finishEvent = threading.Event(), args=[], kwargs={}):
         self.func = function
         self.cycle = cycle
         self.totalRun = totalRun
@@ -595,6 +595,8 @@ class scheduleTask():
         N_cycles -=1
      
         while N_cycles:
+            if finishEvent.isSet():
+                break
             timer = threading.Timer(self.cycle, self.func, self.args, self.kwargs)
             timer.start()
             N_cycles -= 1
