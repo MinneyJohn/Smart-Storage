@@ -544,9 +544,8 @@ class benchMultipleBlkDevice():
             exit(1)
         
         for blkDev in self.blkList:
-            print("Will bench {0}".format(blkDev))
-            '''
+            logMgr.info("Start benching block device {0}".format(blkDev))
             oneDiskBench = benchOneBlockDevice(self.db, self.time)
             oneDiskBench.startBench(kwargs = {'blkDev': blkDev})
-            '''
+
         return 0
