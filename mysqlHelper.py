@@ -518,7 +518,7 @@ class benchCAS():
         return 0
 
 class benchMultipleBlkDevice():
-def __init__(self, db, time):
+    def __init__(self, db, time):
         self.db   = db
         self.time = time
     
