@@ -101,7 +101,7 @@ Please do NOT do CAS configuration during this test progress"""\
 
     # Prepare Stats Collecting Threads
     # Also start cas perf collection for CAS drives
-    casPerf = casPerfStats(DEFAULT_CYCLE_TIME, 1200, logMgr.getDataDir(), finish = fioFinishEvent)
+    casPerf = casPerfStats(DEFAULT_CYCLE_TIME, RUNNING_TO_END, logMgr.getDataDir(), finish = fioFinishEvent)
         
     # Fetch the test case
     testCase = CASE_STR_TO_CLASS[case_str](cacheDev, coreDev, fioFinishEvent)
