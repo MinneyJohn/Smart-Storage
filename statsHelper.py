@@ -365,6 +365,7 @@ class ioStats(longRunStatsCollector):
             self._cacheID = INVALID_CACHE_ID
         
         self._hitCycle = 0
+        logMgr.debug("Specify iostat for <devList, cacheID>: <{0}, {1}>".format(self._devList, self._cacheID))
             
     def generateHeader(self, line):
         if line:

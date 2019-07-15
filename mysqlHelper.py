@@ -157,6 +157,7 @@ class sysbenchTask():
         (ret, output) = casAdmin.getOutPutOfCmd(sysbenchCmd)
         if (0 == ret):
             self.exportResultToCSV()
+        logMgr.info("Ending: {0}".format(sysbenchCmd))
         return ret
     
     def exportResultToCSV(self):
@@ -189,11 +190,13 @@ class sysbenchTask():
         mySqlInst.purgeBinLog(self.db.instID, self.db.pwd)
 
         # Step 1: Start sysbench as a long running task in backgroud
-        sbBackGround = longTask(self.startSysbenchCmd())
+        sbBackGround = longTask(self.startSysbenchCmd)
         (ret, sbRunning) = sbBackGround.start()
         if ret:
             return ret
         
+        logMgr.debug("Sysbench Task started running")
+
         # Only collect perf data for "run" task
         if ("run" == self.action and self.opt["time"]):
             # Step 2: Start buffer pool collection
