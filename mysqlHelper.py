@@ -364,15 +364,15 @@ class defaultBench():
         self.getCustomerCfg()
 
         # Startup the cache instance
-        if mySqlInst.genesis(self.db.instID):
-            return -1
-    
-        # Create dataBase
-        if self.db.createDB():
-            return -1
-
-        # Prepare Data
+        # If specify the skipPrepare, the database should be ready
         if False == self.skipPrepare:
+            if mySqlInst.genesis(self.db.instID):
+                return -1
+    
+            # Create dataBase
+            if self.db.createDB():
+                return -1
+        
             if self.db.prepareData():
                 return -1       
         
