@@ -263,7 +263,7 @@ class sysbenchTask():
         return 0    
     
 class defaultBench():
-    def __init__(self, db, time):
+    def __init__(self, db, time, skipPrepare = False):
         self.db   = db
         self.time = time
 
@@ -279,6 +279,7 @@ class defaultBench():
                             "/usr/share/sysbench/oltp_write_only.lua"]
         self.memStep = 0.2
         self.etraMemList = []
+        self.skipPrepare = skipPrepare
     
     def getBufferSizeList(self, totalMem, dbSize):
         sizeSet = set()
@@ -371,8 +372,11 @@ class defaultBench():
             return -1
 
         # Prepare Data
-        if self.db.prepareData():
-            return -1       
+        if False == self.skipPrepare:
+            if self.db.prepareData():
+                return -1       
+        
+        return 0
 
     # Need to redefine this for necessary
     def doSmartBench(self):
