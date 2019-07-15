@@ -186,7 +186,7 @@ class casAdmin():
         cmd_str = "lsblk {0} -b -o NAME,SIZE|grep \"{1} \"".format(coreDev, coreDev_noPre)
         (ret, output) = cls.getOutPutOfCmd(cmd_str)
         words = cls.getWordsOfLine(output)
-        return (int(words[1])/1024/1024/1024)
+        return int(int(words[1])/1024/1024/1024)
 
     @classmethod
     def getCacheSizeInGib(cls, cacheDev):
@@ -597,6 +597,7 @@ class scheduleTask():
      
         while N_cycles:
             if self.finishEvent.isSet():
+                logMgr.info("Got finish notification of scheduleTask, Exit")
                 break
             timer = threading.Timer(self.cycle, self.func, self.args, self.kwargs)
             timer.start()

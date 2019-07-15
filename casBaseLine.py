@@ -46,17 +46,17 @@ def setupArgsParser():
 def verifyArgs(args):
     if (False == casAdmin.blockDeviceExist(args.cache) 
         or False == casAdmin.blockDeviceExist(args.core)):
-        print "**SORRY** Please make sure {0} and {1} do exist\n".format(args.cache, args.core)
+        print("**SORRY** Please make sure {0} and {1} do exist\n".format(args.cache, args.core))
         exit(1)    
     elif (True == casAdmin.hasPartionOnDev(args.cache) 
         or True == casAdmin.hasPartionOnDev(args.core)):
-        print "**SORRY** Please make sure {0} and {1} does NOT have partition or CAS configuration\n".format(args.cache, args.core)
+        print("**SORRY** Please make sure {0} and {1} does NOT have partition or CAS configuration\n".format(args.cache, args.core))
         exit(1)
     elif False == casAdmin.isCacheCoreClear(args.cache, args.core):
-        print "**SORRY** Please make sure {0} and {1} NOT being used\n".format(args.cache, args.core)
+        print("**SORRY** Please make sure {0} and {1} NOT being used\n".format(args.cache, args.core))
         exit(1)
     elif False == os.path.isdir(args.output):
-        print "**SORRY** Please make sure dir {0} exist".format(args.output)
+        print("**SORRY** Please make sure dir {0} exist".format(args.output))
         exit(1)
 
 if __name__ == "__main__": 
@@ -86,7 +86,7 @@ Running log is {3}
 Please do NOT do CAS configuration during this test progress"""\
     .format(cacheDev, coreDev, logMgr.getDataDir(), logFileName)
 
-    print notice_msg
+    print(notice_msg)
 
     logMgr.info("Entry Point to start CAS baseline test")
     logMgr.info("Caching Device is {0}, Core Device is {1}".format(cacheDev, coreDev))
@@ -100,24 +100,25 @@ Please do NOT do CAS configuration during this test progress"""\
     # casAdmin.showCacheVolumeSet()
 
     # Prepare Stats Collecting Threads
-    casPerfStatsObj = CasPerfStats(DEFAULT_CYCLE_TIME, 
-                                    int(RUNNING_TO_END/DEFAULT_CYCLE_TIME), 
-                                    logMgr.getDataDir(), 
-                                    fioFinishEvent)
-    
+    # Also start cas perf collection for CAS drives
+    casPerf = casPerfStats(DEFAULT_CYCLE_TIME, 1200, logMgr.getDataDir(), finish = fioFinishEvent)
+        
     # Fetch the test case
     testCase = CASE_STR_TO_CLASS[case_str](cacheDev, coreDev, fioFinishEvent)
     
     # Generate working threads
-    thread_collect_cas    = threading.Thread(target=casPerfStatsObj.startCollectStats)
     thread_run_fio_jobs   = threading.Thread(target=testCase.do)
     
     # Start the threads
-    thread_collect_cas.start() 
     thread_run_fio_jobs.start()
 
+    # Wait for stats collection to join back
+    (ret, casPerfGoing) = casPerf.start()
+    if (ret):
+        exit(1)
+    
     # Wait for the thread
-    thread_collect_cas.join() 
+    casPerfGoing.join()
     thread_run_fio_jobs.join()
 
     # Stop cache instance to clear the test

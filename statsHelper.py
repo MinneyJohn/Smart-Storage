@@ -23,13 +23,14 @@ advanced python scripts with more advanced libraries.
 '''
 
 class cycleStatsCollector:
-    def __init__(self, cycleTime, runTime, dataDir, kwargs = {}):
+    def __init__(self, cycleTime, runTime, dataDir, finish = threading.Event(), kwargs = {}):
         self._cycleTime = cycleTime
         self._runTime   = runTime
         self._dataDir   = dataDir
         self._csvFile   = ""
         self._hasHeader = False
         self._kwargs    = kwargs
+        self._finish    = finish
         #self.handleKwargs(self._kwargs)
         
         # This is the args for parsing one line 
@@ -39,7 +40,7 @@ class cycleStatsCollector:
     def start(self):
         self.handleKwargs(self._kwargs)
         self.getCsvFile()
-        runTask = scheduleTask(self.cycleRun, self._cycleTime, self._runTime)
+        runTask = scheduleTask(self.cycleRun, self._cycleTime, self._runTime, finishEvent = self._finish)
         return runTask.start()
     
     # When parsing each line, may need extra, this is the kwargs for
@@ -125,6 +126,10 @@ class casPerfStats(cycleStatsCollector):
         
     def parseOneLine(self, line):
         if "cacheID" not in self._kwargs_parse:
+            return ""
+
+        # It is a header, just skip it
+        if line.startswith("Core Id"):
             return ""
 
         cacheID = self._kwargs_parse['cacheID']
@@ -401,9 +406,12 @@ class ioStats(longRunStatsCollector):
         else: # Default
             self._devToCollect = self.getAllDev()
 
+        cycleNum = int(self._runTime / self._cycleTime)
+        if 0 == cycleNum:
+            cycleNum = 1
         iostatCmd = 'iostat -xmtd {0} {1} {2}'.format(self._devToCollect, 
                                                         self._cycleTime, 
-                                                        int(self._runTime / self._cycleTime))
+                                                        cycleNum)
         
         # Set kwargs for one line parsing
         self.setParseKwargs({'devList': self._devToCollect})

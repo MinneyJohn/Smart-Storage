@@ -121,13 +121,13 @@ class jobFIO():
     # Set default parms common for all jobs, can overwrite
     def defaultParms(self):
         self.setParm("name", "fioTest")
-        for k, v in runningSetup.parmDict.iteritems():
+        for k, v in runningSetup.parmDict.items():
             self.setParm(k, v)
         return 0
     
     def genParmStr(self):
         parmStr = ""
-        for k, v in self.parmDict.iteritems():
+        for k, v in self.parmDict.items():
             if v:
                 parmStr = "{0} --{1}={2}".format(parmStr, k, v)
             else:
@@ -165,17 +165,21 @@ class jobFIO():
         # self.setParm("time_based")
         
         # Get thread for IOStats
-        (ret, ioStatThread) = self.getIOStatsThread()
+        (ret, ioStatObj) = self.getIOStatsThread()
         # Start thread for IOStats
         if (0 == ret):
-            ioStatThread.start()
-        
+            logMgr.debug("Ready to start iostat thread")
+            (ret, ioStatThread) = ioStatObj.start()
+
         # Wait for second 0 to start, align stats and fio running
+        '''
+        No need to hanle alignmnet, schedule Task will handle this
         time_seconds_now = datetime.datetime.now().time().second
         seconds_to_wait = (SECONDS_ALIGNMENT - (time_seconds_now % SECONDS_ALIGNMENT))
         logMgr.info("")
         logMgr.info("Sleep {0} seconds to align io stats and fio job".format(seconds_to_wait))
         time.sleep(seconds_to_wait)
+        '''
 
         logMgr.info("Start of FIO Job {0}".format(self.parmDict["name"]))
         self.setOutPut()
@@ -194,31 +198,23 @@ class jobFIO():
         return 0
         
     def getIOStatsThread(self):
-        if self.parmDict.has_key("runtime") and self.parmDict.has_key("filename"):
+        if "runtime" in self.parmDict and "filename" in self.parmDict:
             runTime = self.parmDict["runtime"]
             fileName = self.parmDict["filename"]
         else:
             return (1, "")
 
         (cacheID, coreID) = casAdmin.getCacheCoreIdByDevName(fileName)
-        if (-1 == cacheID):
+        if (INVALID_CACHE_ID == cacheID):
             return (1, "")
 
-        if self.parmDict.has_key("name"):
-            testName = self.parmDict["name"]
-            ioStatsJob = IoStats(DEFAULT_CYCLE_TIME, 
-                                int(runTime/DEFAULT_CYCLE_TIME) + IOSTAT_RUNTIME_BUFFER, 
-                                logMgr.getDataDir(),
-                                testName)
-        else:
-            ioStatsJob = IoStats(DEFAULT_CYCLE_TIME, 
-                                int(runTime/DEFAULT_CYCLE_TIME) + IOSTAT_RUNTIME_BUFFER, 
-                                logMgr.getDataDir())
-
-        thread_collect_iostat = threading.Thread(target=ioStatsJob.startCollectStats,
-                                                        kwargs={"cacheID": cacheID})                                    
-        return (0, thread_collect_iostat)
-
+        # DEBUG DEFAULT_CYCLE_TIME to 5
+        ioStat = ioStats(DEFAULT_CYCLE_TIME, \
+                        runTime + 120, \
+                        logMgr.getDataDir(), \
+                        kwargs = {'cacheID': cacheID})
+        return (0, ioStat)                
+        
 class jobRandWrite(jobFIO):        
     def run(self, devName, size, testName, runTime = 0):
         self.setParm("name", testName)
@@ -321,7 +317,7 @@ class jobFillCachingDevice(jobFIO):
 class estimateCacheFullTime():
     numjob  = 1
     iodepth = 16
-    runTime = 120
+    runTime = 120 # DEBUG 120
 
     @classmethod
     def getTime(cls, cacheDev, coreDev):
@@ -594,7 +590,7 @@ class baselineCacheCorePair():
     def do(self):
         # Make sure cache/core is clear
         if False == casAdmin.isCacheCoreClear(self.cacheDev, self.coreDev):
-            print "**ERROR** Please make sure {0} and {1} NOT used".format(self.cacheDev, self.coreDev)
+            print("**ERROR** Please make sure {0} and {1} NOT used".format(self.cacheDev, self.coreDev))
             return 1
 
         # Estimate the time for running the test case
