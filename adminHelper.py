@@ -582,6 +582,7 @@ class scheduleTask():
         self.totalRun = totalRun
         self.args = args
         self.kwargs = kwargs
+        self.finishEvent = finishEvent
         
     def loop(self):
         N_cycles = int(self.totalRun / self.cycle)
@@ -595,7 +596,7 @@ class scheduleTask():
         N_cycles -=1
      
         while N_cycles:
-            if finishEvent.isSet():
+            if self.finishEvent.isSet():
                 break
             timer = threading.Timer(self.cycle, self.func, self.args, self.kwargs)
             timer.start()
