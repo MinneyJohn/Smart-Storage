@@ -62,6 +62,16 @@ class dataBase():
             else:
                 continue
 
+        if 0 == size_in_GB:
+            logMgr.info("Failed to retrieve database size by MySQL query, try to fetch from file system")
+            cmd = "du -m {0}".format(os.path.join(self.dataDir, self.name))
+            (ret, output) = casAdmin.getOutPutOfCmd(cmd)
+            lines = output.splitlines()
+            if lines:
+                words = lines[0].split()
+                size_in_GB = int(int(words[0])/1024)
+                logMgr.info("In FileSystem, the database is {0}G".format(size_in_GB))
+
         return size_in_GB
 
 '''
