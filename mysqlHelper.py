@@ -458,6 +458,7 @@ class benchOneBlockDevice(defaultBench):
             logMgr.info("Will run sysbench against block device {0}".format(self.blkDev))
         else:
             return 1
+
         return 0
 
         # No need to redefine
@@ -474,8 +475,11 @@ class benchOneBlockDevice(defaultBench):
         self.prepareBench()
         self.doSmartBench()
         
+        # Do not clear the data by default
+        '''
         if self.clearSystem():
             logMgr.info("**ERROR** Failed to clear the system for the bench work")
+        '''
         return 0
 
 class benchCAS():
@@ -511,10 +515,12 @@ class benchCAS():
         # Step 1: Bench Caching Dev
         cachingBench = benchOneBlockDevice(self.db, self.time)
         cachingBench.startBench(kwargs = {'blkDev': self.caching})
+        cachingBench.clearSystem()
 
         # Step 2: Bench Core Dev
         coreBench = benchOneBlockDevice(self.db, self.time)
         coreBench.startBench(kwargs = {'blkDev': self.core})
+        coreBench.clearSystem()
     
         # Step 3: Bench CAS Dev
         ## Configure CAS
@@ -523,6 +529,7 @@ class benchCAS():
         if self.casDisk:
             casBench = benchOneBlockDevice(self.db, self.time)
             casBench.startBench(kwargs = {'blkDev': self.casDisk})
+            casBench.clearSystem()
         
         # Step 3.1: Stop CAS Cache Instance
         cacheID = casAdmin.getIdByCacheDev(casAdmin.getBlkFullPath(self.caching))
@@ -560,5 +567,6 @@ class benchMultipleBlkDevice():
             logMgr.info("Start benching block device {0}".format(blkDev))
             oneDiskBench = benchOneBlockDevice(self.db, self.time)
             oneDiskBench.startBench(kwargs = {'blkDev': blkDev})
+            oneDiskBench.clearSystem()
 
         return 0
