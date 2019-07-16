@@ -112,6 +112,12 @@ This is what the test will do:
 * The test log and perf data will be put in directory */home/john
 * For each sysbench command, it will run 300 seconds
 
+And if you already has the database prepared in the *dataDir* before, then you can skip the phase of data prepare:
+* By specifying option *skipPrep*
+```
+nohup python3 sysbenchRun.py -inst 4 -tables 10 -rows 100000000 -output /home/john -time 600 -skipPrep &
+```
+
 4. Bench against one block device
 Configuration:
 * Do the same mysql and task.cnf same as the default bench
