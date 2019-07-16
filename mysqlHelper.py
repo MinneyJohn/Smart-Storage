@@ -106,6 +106,7 @@ class sysbenchTask():
         self.opt["db-driver"] = "mysql"
         self.opt["mysql-host"] = "localhost"
         self.opt["mysql-user"] = "root"
+        self.opt["percentile"] = 99
         
         # Perf files
         self.resultFile = ""
