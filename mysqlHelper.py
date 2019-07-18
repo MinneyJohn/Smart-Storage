@@ -71,8 +71,7 @@ class dataBase():
                 words = lines[0].split()
                 size_in_GB = int(int(words[0])/1024)
                 logMgr.info("In FileSystem, the database is {0}G".format(size_in_GB))
-
-        return size_in_GB
+        return size_in_GB 
 
 '''
 This class is an abstract of one sysbench task:
