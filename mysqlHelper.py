@@ -190,6 +190,7 @@ class sysbenchTask():
         mySqlInst.purgeBinLog(self.db.instID, self.db.pwd)
 
         # Step 1: Start sysbench as a long running task in backgroud
+        logMgr.debug("Try to start background sysbench task")
         sbBackGround = longTask(self.startSysbenchCmd)
         (ret, sbRunning) = sbBackGround.start()
         if ret:
@@ -346,6 +347,8 @@ class defaultBench():
                     self.sbTaskList.append(load)
 
     def triggerSbTask(self):
+        print("DEBUG - triggerSbTask - threadList {0}".format(self.threadsNumList))
+        print("DEBUG - triggerSbTask - taskList {0}".format(self.sbTaskList))
         for threadNum in self.threadsNumList:
             for sbTask in self.sbTaskList:    
                 sbRunTask = sysbenchTask(self.db, sbTask, self.time, action="run")
@@ -366,6 +369,8 @@ class defaultBench():
         # Startup the cache instance
         # If specify the skipPrepare, the database should be ready
         if False == self.skipPrepare:
+            print("DEBUG - Will Skip Prepare Phase for database")
+            logMgr.debug("Will Skip Prepare Phase for database, please make sure your DB is ready")
             if mySqlInst.genesis(self.db.instID):
                 return -1
     
