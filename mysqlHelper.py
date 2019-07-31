@@ -71,8 +71,7 @@ class dataBase():
                 words = lines[0].split()
                 size_in_GB = int(int(words[0])/1024)
                 logMgr.info("In FileSystem, the database is {0}G".format(size_in_GB))
-
-        return size_in_GB
+        return size_in_GB 
 
 '''
 This class is an abstract of one sysbench task:
@@ -107,6 +106,7 @@ class sysbenchTask():
         self.opt["db-driver"] = "mysql"
         self.opt["mysql-host"] = "localhost"
         self.opt["mysql-user"] = "root"
+        self.opt["percentile"] = 99
         
         # Perf files
         self.resultFile = ""
@@ -162,6 +162,7 @@ class sysbenchTask():
         (ret, output) = sysAdmin.getOutPutOfCmd(sysbenchCmd)
         if (0 == ret):
             self.exportResultToCSV()
+        logMgr.info("Ending: {0}".format(sysbenchCmd))
         return ret
     
     def exportResultToCSV(self):
@@ -194,11 +195,14 @@ class sysbenchTask():
         mySqlInst.purgeBinLog(self.db.instID, self.db.pwd)
 
         # Step 1: Start sysbench as a long running task in backgroud
-        sbBackGround = longTask(self.startSysbenchCmd())
+        logMgr.debug("Try to start background sysbench task")
+        sbBackGround = longTask(self.startSysbenchCmd)
         (ret, sbRunning) = sbBackGround.start()
         if ret:
             return ret
         
+        logMgr.debug("Sysbench Task started running")
+
         # Only collect perf data for "run" task
         if ("run" == self.action and self.opt["time"]):
             # Step 2: Start buffer pool collection
@@ -267,7 +271,7 @@ class sysbenchTask():
         return 0    
     
 class defaultBench():
-    def __init__(self, db, time):
+    def __init__(self, db, time, skipPrepare = False):
         self.db   = db
         self.time = time
 
@@ -283,6 +287,7 @@ class defaultBench():
                             "/usr/share/sysbench/oltp_write_only.lua"]
         self.memStep = 0.2
         self.etraMemList = []
+        self.skipPrepare = skipPrepare
     
     def getBufferSizeList(self, totalMem, dbSize):
         sizeSet = set()
@@ -345,11 +350,18 @@ class defaultBench():
             self.sbTaskList = []
             loadList = re.split(",", workLoadListStr)
             for load in loadList:
+<<<<<<< HEAD
                 #if load in self.validWorkload:
                 # Do not validate the workload file as on different os, it may be in different places
                 self.sbTaskList.append(load)
+=======
+                self.sbTaskList.append(load)
+                # if load in self.validWorkload:
+>>>>>>> 03da2fff6b92355fdd7ee5726c8ef6a83063b200
 
     def triggerSbTask(self):
+        print("DEBUG - triggerSbTask - threadList {0}".format(self.threadsNumList))
+        print("DEBUG - triggerSbTask - taskList {0}".format(self.sbTaskList))
         for threadNum in self.threadsNumList:
             for sbTask in self.sbTaskList:
                 sbRunTask = sysbenchTask(self.db, sbTask, self.time, action="run")
@@ -368,16 +380,21 @@ class defaultBench():
         self.getCustomerCfg()
 
         # Startup the cache instance
-        if mySqlInst.genesis(self.db.instID):
-            return -1
+        # If specify the skipPrepare, the database should be ready
+        if False == self.skipPrepare:
+            print("DEBUG - Will Skip Prepare Phase for database")
+            logMgr.debug("Will Skip Prepare Phase for database, please make sure your DB is ready")
+            if mySqlInst.genesis(self.db.instID):
+                return -1
     
-        # Create dataBase
-        if self.db.createDB():
-            return -1
-
-        # Prepare Data
-        if self.db.prepareData():
-            return -1       
+            # Create dataBase
+            if self.db.createDB():
+                return -1
+        
+            if self.db.prepareData():
+                return -1       
+        
+        return 0
 
     # Need to redefine this for necessary
     def doSmartBench(self):
@@ -463,6 +480,7 @@ class benchOneBlockDevice(defaultBench):
             logMgr.info("Will run sysbench against block device {0}".format(self.blkDev))
         else:
             return 1
+
         return 0
 
         # No need to redefine
@@ -479,8 +497,11 @@ class benchOneBlockDevice(defaultBench):
         self.prepareBench()
         self.doSmartBench()
         
+        # Do not clear the data by default
+        '''
         if self.clearSystem():
             logMgr.info("**ERROR** Failed to clear the system for the bench work")
+        '''
         return 0
 
 class benchCAS():
@@ -516,10 +537,12 @@ class benchCAS():
         # Step 1: Bench Caching Dev
         cachingBench = benchOneBlockDevice(self.db, self.time)
         cachingBench.startBench(kwargs = {'blkDev': self.caching})
+        cachingBench.clearSystem()
 
         # Step 2: Bench Core Dev
         coreBench = benchOneBlockDevice(self.db, self.time)
         coreBench.startBench(kwargs = {'blkDev': self.core})
+        coreBench.clearSystem()
     
         # Step 3: Bench CAS Dev
         ## Configure CAS
@@ -528,6 +551,7 @@ class benchCAS():
         if self.casDisk:
             casBench = benchOneBlockDevice(self.db, self.time)
             casBench.startBench(kwargs = {'blkDev': self.casDisk})
+            casBench.clearSystem()
         
         # Step 3.1: Stop CAS Cache Instance
         cacheID = casAdmin.getIdByCacheDev(sysAdmin.getBlkFullPath(self.caching))
@@ -565,5 +589,6 @@ class benchMultipleBlkDevice():
             logMgr.info("Start benching block device {0}".format(blkDev))
             oneDiskBench = benchOneBlockDevice(self.db, self.time)
             oneDiskBench.startBench(kwargs = {'blkDev': blkDev})
+            oneDiskBench.clearSystem()
 
         return 0

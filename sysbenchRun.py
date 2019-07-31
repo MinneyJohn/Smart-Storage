@@ -56,7 +56,7 @@ def setupArgsParser():
     arg_parser.add_argument('-blkList', metavar='blklist', required=False, default='',
                             help="The list of block drives to bench\n")
     arg_parser.add_argument('-debug', help="Enable debug mode\n", action="store_true")
-        
+    arg_parser.add_argument('-skipPrep', help="Skip the prepare data phase\n", action="store_true")        
 
     return 0
 
@@ -119,7 +119,7 @@ if __name__ == "__main__":
         pwd = "intel123"
     db = mysqlHelper.dataBase(int(args.inst), dbName, pwd, int(args.tables), int(args.rows))
 
-    benchTask = BENCH_CASE_TO_CLASS[args.bench](db, int(args.time))
+    benchTask = BENCH_CASE_TO_CLASS[args.bench](db, int(args.time), skipPrepare = args.skipPrep)
     benchTask.startBench(kwargs = getBenchKwargs(args.bench, args))
 
     logMgr.info("Successfully to complete the benchmark\n")

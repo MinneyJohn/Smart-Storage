@@ -557,7 +557,7 @@ class sysAdmin():
 
     @classmethod
     def doMount(cls, blkDev, mountPoint):
-        command = "mount {0} {1}".format(cls.getBlkFullPath(blkDev), mountPoint)
+        command = "mount -o sync {0} {1}".format(cls.getBlkFullPath(blkDev), mountPoint)
         (ret, output) = cls.getOutPutOfCmd(command)
         return ret
     
@@ -793,6 +793,7 @@ class longTask():
         self.startTime = (self.align - (time_seconds_now % self.align))
         
         if (True == async):
+            logMgr.debug("longTask will sleep {0} seconds for alignment".format(self.startTime))
             time.sleep(self.startTime)
             running_thread = threading.Thread(target=self.func, args=self.args, kwargs=self.kwargs)
             running_thread.start()

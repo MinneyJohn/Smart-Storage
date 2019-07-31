@@ -1,7 +1,13 @@
 # Smart-Storage
+All the tools below are developed and verified by Python 3.6.
+There are 3 tools set now:
+* Tool to do MySQL bench using sysbench
+* Tool to do Intel CAS bench using FIO
+* Tool to collect Intel CAS related drives' stats
+
 ## Run Sysbench against MySQL
 1. Tools you need to install before running this benchmark:
-* MySQL
+* MySQL (8.0)
 * sysbench
 * Python 3
   * I am testing based on Python 3.6
@@ -11,12 +17,33 @@
 
 2. Types of benchwork supported now:
 * Default Bench Mark
-* Benchmark against one block device
+* Beachmark against one single block device
+* Benchmark against a list of block devices
+
 
 3. Default Bench Mark
+This is what the default bench mark will do:
+* Do some initial setup for MySQL (based on your configuration file)
+* Create one database and fill in the data (you can specify the database size using parameter)
+* Run sysbench oltp_read_only, oltp_write_only and oltp_read_write using sysbench
+
+Here is how to trigger this command:
+```
+nohup python3 sysbenchRun.py -inst 1 -tables 10 -rows 1000000 -output /home/john -time 300 &
+```
+
+How to use the parameter:
+* *-inst 1*: to indicate the test to use mysql *instance 1* to do the test
+  * The section of [mysqld@1] in */etc/my.cnf* will be used by *instance 1*
+* *-tables 10*: means the test will create a database with *10 tables*
+* *-rows 10000000*: means the test will create *10000000* rows in each table
+* */home/john*: The directory to store the test result and logs 
+* *-time 300*: For each sysbench job, it will run for *300 seconds*
+
 Configuration before starting the bench mark:
 * Prepare your mysql configuration file which should be /etc/my.cnf
-* Prepare the configuration file *task.cnf* for the benchmark
+* Prepare the configuration file *task.cnf* for the benchmark if necessary
+  * See advance part below
 
 Prepare your configuration file like this:
 * Please make sure you have one default section [mysqld]
@@ -27,7 +54,7 @@ Prepare your configuration file like this:
 * There should be NO conflict between the default [mysqld] and you instance [mysqld@X] configuration
   * Eg. the page size must be the same
   
-Here is one example I am using now:
+Here is one /etc/my/cnf for the above command example:
 ```
 [root@sm114 2019_07_11_01h_08m]# cat /etc/my.cnf
 [mysqld]
@@ -84,64 +111,97 @@ max_connections=3000
 #skip-log-bin
 ```
 
-Here is one example of *task.cnf*:
-* *THREAD_NUM_LIST* is used to set the threads you are going to loop when running sysbench
-* *STATS_CYCLE* is used to set the cycle time to collect perf stats by seconds
-* *DB_NAME* is used to as database name for test, *PWD* is the password for the database
-* *DYNAMIC_BUFFER_POOL_SIZE* is to indicate whether we'll loop different buffer pool size or NOT
+4. Bench against one block device
+You may also want to see how mysql will perform on one block device, then you can do like this:
+```
+nohup python3 sysbenchRun.py -inst 1 -tables 10 -rows 10000000 -output /home/john -time 300 -bench disk -blkDev nvme1n1 -debug &
+```
+
+How to use the parameter:
+* *-bench disk*: used to indicate that you'll run against one disk
+* *-blkDev nvme1n1*: means you'll use device *nvme1n1* to store the database
+* Other parameters are the same as default test
+
+5. Run MySQL benchmark for Intel CAS
+The tool *casBaseLine.py* can be used to do a sysbench test for MySQL to see whethre the Intel CAS may help for your mysql performance.
+
+How to use this command:
+```
+nohup python3 sysbenchRun.py -inst 1 -tables 10 -rows 10000000 -output /home/john -time 300 -bench intelcas -caching nvme1n1 -core sda -debug &
+```
+
+How to use the parameter:
+* *-bench intelcas*: means we'll do an *intelcas* mysql validation
+* *-caching nvme1n1*: means we'll use *nvme1n1* as the caching device to do acceleration
+* *-core sda*: means we'll use *sda* as the core device which is supposed to be accelerated
+In fact, these bench marks will do:
+a) Use caching device *nvme1n1* to run MySQL and capture the performance
+b) Use core device *sda* to run MySQL and capture the performance
+c) Configure Intel CAS drive *intelcas1-1* using *nvme1n1* as caching device and *sda* as core device and then run MySQL on *intelcas1-1* 
+d) By comparing the MySQL performance on *nvme1n1*, *sda* and *intelcas1-1*, we can know whether Intel CAS can help.
+
+6. Run bench against multipe block devices
+```
+nohup python3 sysbenchRun.py -inst 1 -tables 10 -rows 10000000 -output /home/john -time 300 -bench disklist -blkList nvme1n1,sda  -debug & 
+```
+
+How to understand the parameter:
+* *-bench disklist*: means we'll trigger bench against a list of disks
+* *-blkList nvme1n1,sda*: means we'll trigger bench against two disks: *nvme1n1* and *sda*
+
+7. Advanced Options for running all kinds of bench mark
+There are two advanced options to control the benchmark task:
+* *-debug*: when enable, will log more debug information during test
+* *-skipPrep*: when enable, will skip the phase of preparing data for database, the customer needs to make sure the data is already in *datadir* of the database
+
+8. Advance configuration of this tool
+This tool provide a configuration file *task.cnf* to configure how to run this workload.
+
+Here are those options we can specifiy now:
+* If you want to enable some options, just remove *#* before the option and specify the value you need
 ```
 [sysbench]
-THREAD_NUM_LIST=100, 128
-STATS_CYCLE=5
-DB_NAME=sbtest
-PWD=intel123
-DYNAMIC_BUFFER_POOL_SIZE=Fales
-
-#If you want to try multiple threads
-#THREAD_NUM_LIST=100,128,256
-#DYNAMIC_BUFFER_POOL_SIZE=False
+#THREAD_NUM_LIST=100, 128
+#STATS_CYCLE=5
+#DB_NAME=sbtest
+#PWD=intel123
+#WORK_LOAD=/usr/share/sysbench/oltp_read_write.lua
+#DYNAMIC_BUFFER_POOL_SIZE=True
+#BUFFER_CHANGE_STEP=0.05
+#EXTRA_MEM_LIST=10,20
 ```
 
-Here is how to trigger the test:
-```
-nohup python sysbenchRun.py -inst 1 -tables 10 -rows 1000000 -output /home/john -time 300 &
-```
-This is what the test will do:
-* Use the mysql configuration for instance 1 which is section [mysqld@1]
-* The test database will have 10 tables with 1000000 rows for each
-* The test log and perf data will be put in directory */home/john
-* For each sysbench command, it will run 300 seconds
-
-4. Bench against one block device
-Configuration:
-* Do the same mysql and task.cnf same as the default bench
-* But make sure the "datadir" for your test mysql instance does NOT exist
-
-Here is how to trigger the test:
-```
-nohup python sysbenchRun.py -inst 1 -tables 10 -rows 1000000 -output /home/john -time 300 -bench disk -blkDev nvme0n1 &
-```
-This is what the test will do:
-* It will mount device *nvme0n1* to the *datadir* configured in the my.cnf
-* Then trigger sysbench against that datadir
+How to understand the options:
+* *THREAD_NUM_LIST=100, 128*: means when running sysbench command, will loop cases for 100 threads and 128 threads
+* *STATS_CYCLE=5*: means we'll collect the stats using 5 seconds 
+  * 5 seconds is used by default if NOT enabling
+* *DB_NAME=sbtest*: means the name of the database is *sbtest*
+* *PWD=intel123*: means the password of the database will be *intel123*
+* *WORK_LOAD=/usr/share/sysbench/oltp_read_write.lua*: means we'll run only *read_write*
+  * By default, we'll run read_only, write_only and read_write
+* *DYNAMIC_BUFFER_POOL_SIZE=True*: means we'll use dynamic buffer pool size when running the test
+  * *BUFFER_CHANGE_STEP*: this is the step to change buffer pool size, starting form min of database size and system physical size
+  * *EXTRA_MEM_LIST=10,20*: means we'll add test cases for buffer pool size *10G* and *20G*
 
 ## Baseline performance validation against one cache/core pair using CAS
-The tool *casBaseLine.py* can be used to trigger one baseline performance validation against one cache/core pair.  
-   
-How to use this command
-```
-[root@apss117t Smart-Storage]# python casBaseLine.py -h
+The tool casBaseLine.py can be used to trigger one baseline performance validation against one cache/core pair.
+
+Before running this tool, you need to do:
+* Install Intel CAS 
+* Install fio
+
+How to use this command:
+[root@apss117t Smart-Storage]# python3 casBaseLine.py -h
 usage: casBaseLine.py [-h] -cache cacheDev -core coreDev -output dir
 optional arguments:
   -h, --help       show this help message and exit
   -cache cacheDev  The device of cache, eg. /dev/nvme
   -core coreDev    The device of core, eg. /dev/sdb
   -output dir      The dir to contain the perf data, eg. /home/you
-```
 
 Example Usage
 ```
-[root@apss117t Smart-Storage]# python casBaseLine.py -cache /dev/nvme0n1p7 -core /dev/sdb6 -output /home/john/casBaseLineData/ &
+[root@apss117t Smart-Storage]# python3 casBaseLine.py -cache /dev/nvme0n1p7 -core /dev/sdb6 -output /home/john/casBaseLineData/ &
 Start doing baseline CAS test using cache /dev/nvme0n1p7 and core /dev/sdb6
 The performance CSV files are in /home/john/casBaseLineData/
 Running log is /home/john/casBaseLineData/smart-storage-2019-04-29-02h-33m.log
@@ -184,7 +244,30 @@ Here is the CSV files for iostat, there is one CSV file each workload:
 -rw-r--r-- 1 root root  1601 May  5 22:38 WriteSpeedCheck_IOStat_2019_05_05_22_32.csv
 ```
 
+Advance Parameters:
+* *-case testCase*: used to specify only one workload to run
+  * rndReadMiss, rndReadHit, rndWriteMiss, rndWriteHit, ReadMiss, ReadHit, WriteMiss, WriteHit, WriteOverflow
+
 ## Collect CAS related devices' CAS Perf and IOSTAT Data
+Tool *collectStats.py* is used to collect Intel CAS related stats:
+* Those drives' workload will be collected:
+  * Intelcasx-x
+  * Caching Devcies
+  * Core Devices
+* Those data will be collected:
+  * *iostat* data
+  * Caching Perf Data using *"casadm -P"* 
+
+How to use this tool:
+[root@sm116 Smart-Storage]# python3 collectStats.py -h
+usage: collectStats.py [-h] -C Cycle_Time -T Running_Time -O Output_Dir
+
+optional arguments:
+  -h, --help       show this help message and exit
+  -C Cycle_Time    Duration of Monitor Cycle by Seconds
+  -T Running_Time  Total Monitor Time by Seconds
+  -O Output_Dir    Output Dir
+
 Example Usage
 ```
 python collectStats.py -C 60 -T 1200 -O /home/john &

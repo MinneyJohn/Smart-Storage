@@ -362,6 +362,7 @@ class ioStats(longRunStatsCollector):
         
         logMgr.debug("IOSTAT's kwargs is devList: {0}, cacheID: {1}".format(self._devList, self._cacheID))
         self._hitCycle = 0
+        logMgr.debug("Specify iostat for <devList, cacheID>: <{0}, {1}>".format(self._devList, self._cacheID))
             
     def generateHeader(self, line):
         if line:

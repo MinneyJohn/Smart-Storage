@@ -72,9 +72,28 @@ Please do NOT do CAS configuration during this test progress"""\
     logMgr.info("CAS cfgfile is {0}".format(cascfg))
     logMgr.info("Will cover test case: {0}".format(case_str))
     
+<<<<<<< HEAD
     caseID = getBenchCaseID(case_str)
     casBench = casBaseLineBench("/etc/intelcas/intelcas.conf", caseID)
     casBench.startBench()
+=======
+    # Used this event to notify stats collection to be able to quit
+    fioFinishEvent = threading.Event()
+
+    # Check existing caches
+    casAdmin.refreshCacheVolumeSet()
+    # casAdmin.showCacheVolumeSet()
+
+    # Prepare Stats Collecting Threads
+    # Also start cas perf collection for CAS drives
+    casPerf = casPerfStats(DEFAULT_CYCLE_TIME, RUNNING_TO_END, logMgr.getDataDir(), finish = fioFinishEvent)
+        
+    # Fetch the test case
+    testCase = CASE_STR_TO_CLASS[case_str](cacheDev, coreDev, fioFinishEvent)
+    
+    # Generate working threads
+    thread_run_fio_jobs   = threading.Thread(target=testCase.do)
+>>>>>>> 03da2fff6b92355fdd7ee5726c8ef6a83063b200
     
     logMgr.info("Exit Point of CAS baseline Test\n\n\n")
     exit(0)

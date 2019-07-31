@@ -1,15 +1,6 @@
 [sysbench]
-THREAD_NUM_LIST=100
-STATS_CYCLE=5 
-DB_NAME=sbtest
-PWD=intel123
-DYNAMIC_BUFFER_POOL_SIZE=True
-BUFFER_CHANGE_STEP=0.1
-WORK_LOAD=/usr/share/sysbench/oltp_read_write.lua
-EXTRA_MEM_LIST=8
-
-#If you want to try multiple threads
 #THREAD_NUM_LIST=100,128
+<<<<<<< HEAD
 #DYNAMIC_BUFFER_POOL_SIZE=False
 
 # read,write,randread,randwrite,randrw
@@ -34,3 +25,12 @@ bslist=4k
 [randread]
 numjoblist=8
 bslist=4k
+=======
+#STATS_CYCLE=5 
+#DB_NAME=sbtest
+#PWD=intel123
+#DYNAMIC_BUFFER_POOL_SIZE=True
+#BUFFER_CHANGE_STEP=0.05
+#WORK_LOAD=/usr/share/sysbench/oltp_read_write.lua
+#EXTRA_MEM_LIST=10
+>>>>>>> 03da2fff6b92355fdd7ee5726c8ef6a83063b200
