@@ -9,53 +9,34 @@ from fioHelper import *
 from loggerHelper import *
 from adminHelper import *
 
-'''
-Here is the mapping from the case name to the case class;
-By default, all the test cases will be covered;
-But the user can also specify the single test case to cover;
-Now only two options:
-a) All test cases
-b) Or only one single test case
-'''
-CASE_STR_TO_CLASS = {"all":          baselineCacheCorePair,
-                    "rndReadMiss":   caseRandReadMiss,
-                    "rndReadHit":    caseRandReadHit,
-                    "rndWriteMiss":  caseRandWriteMiss,
-                    "rndWriteHit":   caseRandWriteHit,
-                    "ReadMiss":      caseSeqReadMiss,
-                    "ReadHit":       caseSeqReadHit,
-                    "WriteMiss":     caseSeqWriteMiss,
-                    "WriteHit":      caseSeqWriteHit,
-                    "WriteOverflow": caseWriteOverflow}
 
-validCaseList=["rndReadMiss", "rndReadHit", "rndWriteMiss", "rndWriteHit",
-                "ReadMiss", "ReadHit", "WriteMiss", "WriteHit", "WriteOverflow"]
+def getBenchCaseID(benchCaseStr):
+    return {
+        "all"           : BENCH_ALL,
+        "cachingOnly"   : BENCH_CACHING_ONLY,
+        "coreOnly"      : BENCH_CORE_ONLY,
+        "casOnly"       : BENCH_CAS_ONLY,
+    } [benchCaseStr]
+
+validCaseList=["default", "cachingOnly", "coreOnly", "casOnly"]
 
 def setupArgsParser():
     global arg_parser
     
-    arg_parser.add_argument('-cache', metavar='cacheDev', required=True, help='The device of cache, eg. /dev/nvme')
-    arg_parser.add_argument('-core', metavar='coreDev', required=True, help='The device of core, eg. /dev/sdb')
-    arg_parser.add_argument('-output', metavar='dir', required=True, help='The dir to contain the perf data, eg. /home/you')
-    arg_parser.add_argument('-case', metavar='testCase', required=False, default='all',
-                            choices=validCaseList, help="By default, all test cases would be covered. "\
-                                                        "Or you can choose one single test caes to run:"\
-                                                        "{0}".format(validCaseList))
+    arg_parser.add_argument('--output', metavar='dir', required=True,\
+                            help='The dir to contain the perf data, eg. /home/you')
+    arg_parser.add_argument('--cascfg', metavar='casCfg', required=False,\
+                            default='/etc/intelcas/intelcas.conf',\
+                            help='The intelcas.conf file to use for test')
+    arg_parser.add_argument('--case', metavar='testCase', required=False,\
+                            default='all', choices=validCaseList,\
+                            help="By default, all test cases would be covered. "\
+                                "Or you can choose one single test caes to run:"\
+                                "{0}".format(validCaseList))
     return 0
 
 def verifyArgs(args):
-    if (False == casAdmin.blockDeviceExist(args.cache) 
-        or False == casAdmin.blockDeviceExist(args.core)):
-        print("**SORRY** Please make sure {0} and {1} do exist\n".format(args.cache, args.core))
-        exit(1)    
-    elif (True == casAdmin.hasPartionOnDev(args.cache) 
-        or True == casAdmin.hasPartionOnDev(args.core)):
-        print("**SORRY** Please make sure {0} and {1} does NOT have partition or CAS configuration\n".format(args.cache, args.core))
-        exit(1)
-    elif False == casAdmin.isCacheCoreClear(args.cache, args.core):
-        print("**SORRY** Please make sure {0} and {1} NOT being used\n".format(args.cache, args.core))
-        exit(1)
-    elif False == os.path.isdir(args.output):
+    if False == os.path.isdir(args.output):
         print("**SORRY** Please make sure dir {0} exist".format(args.output))
         exit(1)
 
@@ -68,30 +49,34 @@ if __name__ == "__main__":
     verifyArgs(args)
 
     # Fetch args
-    cacheDev = args.cache
-    coreDev = args.core
-    output  = args.output
+    output   = args.output
     case_str = args.case
+    cascfg   = args.cascfg
 
     # Setup logfile and dataDir
     logMgr.setDataDir(output)
-    logFileName = os.path.join(logMgr.getDataDir(), time.strftime("smart-storage-%Y-%m-%d-%Hh-%Mm.log"))
+    logFileName = os.path.join(logMgr.getDataDir(), time.strftime("casBaseLineTest-%Y-%m-%d-%Hh-%Mm.log"))
     logMgr.setUpRunningLog(logFileName)
     logMgr.info("\n\n")
 
     # Print notice msg for the user
-    notice_msg = """\nStart doing baseline CAS test using cache {0} and core {1}
-The performance CSV files are in {2}
-Running log is {3}
+    notice_msg = """\nStart doing baseline CAS with cfgfile {0}
+The performance CSV files will be stored in {1}
+Running log will be {2}
 Please do NOT do CAS configuration during this test progress"""\
-    .format(cacheDev, coreDev, logMgr.getDataDir(), logFileName)
+    .format(cascfg, logMgr.getDataDir(), logFileName)
 
     print(notice_msg)
 
     logMgr.info("Entry Point to start CAS baseline test")
-    logMgr.info("Caching Device is {0}, Core Device is {1}".format(cacheDev, coreDev))
+    logMgr.info("CAS cfgfile is {0}".format(cascfg))
     logMgr.info("Will cover test case: {0}".format(case_str))
     
+<<<<<<< HEAD
+    caseID = getBenchCaseID(case_str)
+    casBench = casBaseLineBench("/etc/intelcas/intelcas.conf", caseID)
+    casBench.startBench()
+=======
     # Used this event to notify stats collection to be able to quit
     fioFinishEvent = threading.Event()
 
@@ -108,21 +93,7 @@ Please do NOT do CAS configuration during this test progress"""\
     
     # Generate working threads
     thread_run_fio_jobs   = threading.Thread(target=testCase.do)
+>>>>>>> 03da2fff6b92355fdd7ee5726c8ef6a83063b200
     
-    # Start the threads
-    thread_run_fio_jobs.start()
-
-    # Wait for stats collection to join back
-    (ret, casPerfGoing) = casPerf.start()
-    if (ret):
-        exit(1)
-    
-    # Wait for the thread
-    casPerfGoing.join()
-    thread_run_fio_jobs.join()
-
-    # Stop cache instance to clear the test
-    casAdmin.stopCacheInstance(casAdmin.getIdByCacheDev(cacheDev))
-
     logMgr.info("Exit Point of CAS baseline Test\n\n\n")
     exit(0)
