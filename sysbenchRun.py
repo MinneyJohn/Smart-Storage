@@ -13,7 +13,9 @@ import configparser
 from loggerHelper import *
 from adminHelper import *
 from statsHelper import *
+
 import mysqlHelper
+import fioHelper
 
 BENCH_CASE_TO_CLASS = {"default":          mysqlHelper.defaultBench,
                         "disk":            mysqlHelper.benchOneBlockDevice,
@@ -79,6 +81,19 @@ def verifyArgs(args):
         exit(1)
 
 if __name__ == "__main__": 
+    # DEBUG
+    logMgr.setDataDir("/home/john")
+    logMgr.setUpRunningLog(os.path.join(logMgr.getDataDir(), "running.log"))
+
+    casCfg = intelCasCfg("intelcas.conf")
+    casCfg.showAll()
+
+    taskCfg.showOpt()
+
+    benchRaw = fioHelper.benchCasRawDevices(casCfg)
+    benchRaw.startBench()
+    exit(0)
+
     arg_parser = argparse.ArgumentParser()
     setupArgsParser()
     args = arg_parser.parse_args()

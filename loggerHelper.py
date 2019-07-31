@@ -9,6 +9,7 @@ class logMgr():
     logName = ""
     logFile = ""
     dataDir = ""
+    debugMode = True # DEBUG
 
     @classmethod
     def setUpRunningLog(cls, logFile):

@@ -52,28 +52,31 @@ if __name__ == "__main__":
                 format(CYCLE_TIME, RUNNINGT_TIME, WORKING_DIR))
 
     
-    #casAdmin.refreshCacheVolumeSet()
-    #casAdmin.showCacheVolumeSet()
+    casAdmin.refreshRunning()
 
-    #casPerf = casPerfStats(CYCLE_TIME, RUNNINGT_TIME, logMgr.getDataDir())
-    ioStats = ioStats(CYCLE_TIME, RUNNINGT_TIME, logMgr.getDataDir(), kwargs = {'devList': "nvme1n1"})
-    #(ret, casPerfGoing) = casPerf.start()
-    #if ret:
-    #    exit(0)
+    casPerf = casPerfStats(CYCLE_TIME, RUNNINGT_TIME, logMgr.getDataDir())
+    ioStats = ioStats(CYCLE_TIME, RUNNINGT_TIME, logMgr.getDataDir(), kwargs = {'cacheID': 1})
+    (ret, casPerfGoing) = casPerf.start()
+    if ret:
+        exit(0)
     (ret, ioStatsGoing) = ioStats.start()
     if ret:
         exit(0)
 
+    '''
     bufferPoolStats = mysqlBufferPoolStats(CYCLE_TIME, RUNNINGT_TIME, logMgr.getDataDir(), \
                                             kwargs = {'instID': 3, 'pwd': 'intel123'})
     (ret, bufferPoolGoing) = bufferPoolStats.start()
     if (ret):
         exit(0)
+    '''
 
     # Wait for the thread
-    #casPerfGoing.join()
+    casPerfGoing.join()
     ioStatsGoing.join()
+    '''
     bufferPoolGoing.join()
+    '''
 
     logMgr.info("End of Collect Stats")
     exit(0)
