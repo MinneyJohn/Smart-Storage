@@ -2,7 +2,7 @@
 
 [global]
 name=base-fio
-direct=0
+direct=1
 ioengine=libaio
 time_based=1
 
