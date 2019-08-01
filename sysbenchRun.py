@@ -35,28 +35,28 @@ def getBenchKwargs(benchCase, args):
 def setupArgsParser():
     global arg_parser
     
-    arg_parser.add_argument('-inst', metavar='sqlInstance', required=True, help='The instance ID of mysql to run the test')
-    arg_parser.add_argument('-tables', metavar='numTables', required=True, help='Number of tables in the database')
-    arg_parser.add_argument('-rows', metavar='numRows', required=True, help='Number of rows for each table')
-    arg_parser.add_argument('-output', metavar='outputDir', required=True, \
+    arg_parser.add_argument('--inst', metavar='sqlInstance', required=True, help='The instance ID of mysql to run the test')
+    arg_parser.add_argument('--tables', metavar='numTables', required=True, help='Number of tables in the database')
+    arg_parser.add_argument('--rows', metavar='numRows', required=True, help='Number of rows for each table')
+    arg_parser.add_argument('--output', metavar='outputDir', required=True, \
                             help="Output directory to store the log and perf data")   
-    arg_parser.add_argument('-time', metavar='runTime', required=True, \
+    arg_parser.add_argument('--time', metavar='runTime', required=True, \
                             help="Running time for each sysbench command")
-    arg_parser.add_argument('-cycle', metavar='cycleTime', required=False, default=0, \
+    arg_parser.add_argument('--cycle', metavar='cycleTime', required=False, default=0, \
                             help="Cycle time to report perf data")
-    arg_parser.add_argument('-bench', metavar='benchTask', required=False, default='default',
+    arg_parser.add_argument('--bench', metavar='benchTask', required=False, default='default',
                             choices=BENCH_CASE_LIST, help="You can choose one bench task to run:\n"\
                                                         "{0}".format(BENCH_CASE_LIST))
-    arg_parser.add_argument('-blkDev', metavar='blockDevice', required=False, default='',
+    arg_parser.add_argument('--blkDev', metavar='blockDevice', required=False, default='',
                             help="Specify block device you want to bench\n")
-    arg_parser.add_argument('-caching', metavar='cachingDev', required=False, default='',
+    arg_parser.add_argument('--caching', metavar='cachingDev', required=False, default='',
                             help="The caching device for intelcas\n")
-    arg_parser.add_argument('-core', metavar='coreDev', required=False, default='',
+    arg_parser.add_argument('--core', metavar='coreDev', required=False, default='',
                             help="The core device for intelcas\n")
-    arg_parser.add_argument('-blkList', metavar='blklist', required=False, default='',
+    arg_parser.add_argument('--blkList', metavar='blklist', required=False, default='',
                             help="The list of block drives to bench\n")
-    arg_parser.add_argument('-debug', help="Enable debug mode\n", action="store_true")
-    arg_parser.add_argument('-skipPrep', help="Skip the prepare data phase\n", action="store_true")        
+    arg_parser.add_argument('--debug', help="Enable debug mode\n", action="store_true")
+    arg_parser.add_argument('--skipPrep', help="Skip the prepare data phase\n", action="store_true")        
 
     return 0
 
