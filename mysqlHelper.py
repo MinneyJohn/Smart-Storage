@@ -14,6 +14,7 @@ import fnmatch
 from adminHelper import *
 from statsHelper import *
 
+
 '''
 This class is an abstrat of one database
 '''    
@@ -157,6 +158,8 @@ class sysbenchTask():
         (ret, output) = casAdmin.getOutPutOfCmd(sysbenchCmd)
         if (0 == ret):
             self.exportResultToCSV()
+        
+
         logMgr.info("Ending: {0}".format(sysbenchCmd))
         return ret
     
@@ -185,9 +188,15 @@ class sysbenchTask():
 
     def trigger(self):
         bCASRunning = False
+        sysbenchFinish = threading.Event()
 
         # Step 0: Try to purge bin logs to save space
-        mySqlInst.purgeBinLog(self.db.instID, self.db.pwd)
+        if self.opt['time']:
+            (ret, purgeGoing) = scheduleTask(mySqlInst.purgeBinLog, DEFAULT_CYCLE_TIME, self.opt['time'], \
+                                            finishEvent = sysbenchFinish, kwargs = {'instID': self.db.instID, 'pwd': self.db.pwd}).start()
+        else:
+            (ret, purgeGoing) = scheduleTask(mySqlInst.purgeBinLog, DEFAULT_CYCLE_TIME, RUNNING_TO_END, \
+                                            finishEvent = sysbenchFinish, kwargs = {'instID': self.db.instID, 'pwd': self.db.pwd}).start()
 
         # Step 1: Start sysbench as a long running task in backgroud
         sbBackGround = longTask(self.startSysbenchCmd)
@@ -259,6 +268,8 @@ class sysbenchTask():
         # End for "run" task
 
         sbRunning.join()
+        sysbenchFinish.set() # Set sysbench finish event, notify purgeGoing
+        purgeGoing.join()
         logMgr.info("End of sysbench Task: {0}\n".format(self.sbTask))
         return 0    
     
