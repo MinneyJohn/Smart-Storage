@@ -18,7 +18,7 @@ def getBenchCaseID(benchCaseStr):
         "casOnly"       : BENCH_CAS_ONLY,
     } [benchCaseStr]
 
-validCaseList=["default", "cachingOnly", "coreOnly", "casOnly"]
+validCaseList=["all", "cachingOnly", "coreOnly", "casOnly"]
 
 def setupArgsParser():
     global arg_parser

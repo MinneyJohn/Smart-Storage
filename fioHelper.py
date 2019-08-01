@@ -419,7 +419,6 @@ class benchCASDisk():
         # Do real CAS configuration
         casAdmin.initByCasCfg()
 
-        '''
         if ("write" in self._rwList) or ("randwrite" in self._rwList):
             if ("randwrite" in self._rwList):
                 # Do rand write miss
@@ -449,7 +448,6 @@ class benchCASDisk():
         if ("randread" in self._rwList):
             casRndRead_Hit = benchCasRead('cas.rndReadHit', self._casCfgFile, self._casDeviceS, 'randread', READ_HIT)
             casRndRead_Hit.startBench()
-        '''
 
         # Reconfig CAS
         if ("read" in self._rwList):
