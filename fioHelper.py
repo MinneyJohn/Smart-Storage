@@ -13,6 +13,8 @@ from adminHelper import *
 from loggerHelper import *
 from statsHelper import *
 
+BASE_JOB_FILE = "base.fio"
+
 '''
 ToDo:
 a) 8K cache line size, how to calcualte dirty data capacity
@@ -31,6 +33,11 @@ RUNTIME_MIN_PER_CAS = 700
 RUNNING_TO_END = 360000 # 100 hours, MAX Running Time
 SECONDS_ALIGNMENT = 60 # Time to align stats and fio job
 IOSTAT_RUNTIME_BUFFER = 3 # Buffer minutes for iostat to make sure it can cover FIO job
+
+BENCH_CACHING_ONLY = 1
+BENCH_CORE_ONLY    = 2
+BENCH_CAS_ONLY     = 3
+BENCH_ALL          = 4
 
 '''
 The customer wants to see those information for one caching software
@@ -107,568 +114,397 @@ class runningSetup():
     @classmethod
     def getRunningSetup(cls, parmName):
         return cls.parmDict[parmName]
-
-class jobFIO():
-    minT = RUNTIME_MIN_PER_CAS
-    def __init__(self):
-        self.parmDict = {}
-        self.defaultParms()
-        
-    def setParm(self, parmName, parmValue = ""):
-        self.parmDict[parmName] = parmValue
-        return 0
-    
-    # Set default parms common for all jobs, can overwrite
-    def defaultParms(self):
-        self.setParm("name", "fioTest")
-        for k, v in runningSetup.parmDict.items():
-            self.setParm(k, v)
-        return 0
-    
-    def genParmStr(self):
-        parmStr = ""
-        for k, v in self.parmDict.items():
-            if v:
-                parmStr = "{0} --{1}={2}".format(parmStr, k, v)
-            else:
-                parmStr = "{0} --{1}".format(parmStr, k)
-        return parmStr
-
-    def runTimeControl(self, runTime):
-        if (0 < runTime):
-            if (int(runTime) < self.minT):
-                runTime = self.minT
-            self.setParm("runtime", runTime)
-            self.setParm("time_based")
-
-    def setOutPut(self):
-        outputFile = os.path.join(logMgr.getDataDir(), 
-                                "{0}_{1}.fio.summary".\
-                                format(self.parmDict["name"], MyTimeStamp.getAppendTime()))
-        self.setParm("output", outputFile)
-        self.setParm("output-format", "terse")
-
-    def addFioSummaryHeader(self):
-        outputFile = self.parmDict["output"]
-        fp = open(outputFile, "r")
-        line = fp.readline()
-        fp.close()
-        
-        fp = open(outputFile, "w+")
-        lines = "{0}\n{1}".format(runningSetup.header_terse, line)
-        fp.writelines(lines)
-        fp.close()
-
-    def execute(self):
-        # FOR DEBUG to run VERY fast
-        # self.setParm("runtime", 120)
-        # self.setParm("time_based")
-        
-        # Get thread for IOStats
-        (ret, ioStatObj) = self.getIOStatsThread()
-        # Start thread for IOStats
-        if (0 == ret):
-            logMgr.debug("Ready to start iostat thread")
-            (ret, ioStatThread) = ioStatObj.start()
-
-        # Wait for second 0 to start, align stats and fio running
-        '''
-        No need to hanle alignmnet, schedule Task will handle this
-        time_seconds_now = datetime.datetime.now().time().second
-        seconds_to_wait = (SECONDS_ALIGNMENT - (time_seconds_now % SECONDS_ALIGNMENT))
-        logMgr.info("")
-        logMgr.info("Sleep {0} seconds to align io stats and fio job".format(seconds_to_wait))
-        time.sleep(seconds_to_wait)
-        '''
-
-        logMgr.info("Start of FIO Job {0}".format(self.parmDict["name"]))
-        self.setOutPut()
-        fio_cmd = "fio {0}".format(self.genParmStr())
-        logMgr.info(fio_cmd)
-        # Start FIO Job
-        casAdmin.getOutPutOfCmd(fio_cmd)
-        logMgr.info("End of FIO Job {0}".format(self.parmDict["name"]))
-        
-        # Add header to FIO summary
-        self.addFioSummaryHeader()
-
-        # Wait for IOStats to finish
-        if (0 == ret):
-            ioStatThread.join()
-        return 0
-        
-    def getIOStatsThread(self):
-        if "runtime" in self.parmDict and "filename" in self.parmDict:
-            runTime = self.parmDict["runtime"]
-            fileName = self.parmDict["filename"]
-        else:
-            return (1, "")
-
-        (cacheID, coreID) = casAdmin.getCacheCoreIdByDevName(fileName)
-        if (INVALID_CACHE_ID == cacheID):
-            return (1, "")
-
-        # DEBUG DEFAULT_CYCLE_TIME to 5
-        ioStat = ioStats(DEFAULT_CYCLE_TIME, \
-                        runTime + 120, \
-                        logMgr.getDataDir(), \
-                        kwargs = {'cacheID': cacheID})
-        return (0, ioStat)                
-        
-class jobRandWrite(jobFIO):        
-    def run(self, devName, size, testName, runTime = 0):
-        self.setParm("name", testName)
-        self.setParm("filename", devName)
-        self.setParm("size", "{0}G".format(size))
-        self.setParm("rw", "randwrite")
-        self.setParm("bs", "4K")
-
-        self.runTimeControl(runTime)
-        self.execute()
-        return 0
-        
-class jobRandRead(jobFIO):
-    def run(self, devName, size, testName, runTime = 0):
-        self.setParm("name", testName)
-        self.setParm("filename", devName)
-        self.setParm("size", "{0}G".format(size))
-        self.setParm("rw", "randread")
-        self.setParm("bs", "4K")
-        self.runTimeControl(runTime)
-        self.execute()
-        return 0
-    
-class jobSeqWrite(jobFIO):
-    def run(self, devName, size, testName, runTime = 0):
-        self.setParm("name", testName)
-        self.setParm("filename", devName)
-        self.setParm("size", "{0}G".format(size))
-        self.setParm("rw", "write")
-        self.setParm("bs", "128K")
-        # Single Job for sequential
-        self.setParm("iodepth", 16)
-        self.setParm("numjobs", 1)
-
-        self.runTimeControl(runTime)
-        self.execute()
-        return 0
-
-class jobSeqRead(jobFIO):
-    def run(self, devName, size, testName, runTime = 0):
-        self.setParm("name", testName)
-        self.setParm("filename", devName)
-        self.setParm("size", "{0}G".format(size))
-        self.setParm("rw", "read")
-        self.setParm("bs", "128K")
-        self.setParm("iodepth", 16)
-        self.setParm("numjobs", 1)
-
-        self.runTimeControl(runTime)
-        self.execute()
-        return 0
-
-# Use Seq Write Miss with single JOB to estimate running time
-# As we'll use seq write miss to fill caching device for hit case
-class jobTestWriteSpeed(jobFIO):
-    def run(self, devName, size, testName, runTime):
-        self.setParm("name", testName)
-        self.setParm("filename", devName)
-        self.setParm("size", "{0}G".format(size))
-        self.setParm("rw", "write")
-        self.setParm("bs", "128K")
-        self.setParm("iodepth", 4)
-        self.setParm("numjobs", 1)
-        self.setParm("runtime", runTime)
-        self.execute()
-        return 0
-
-class jobWriteOverflow(jobFIO):
-    def run(self, devName, cacheSize, coreSize, name, runTime=0):
-        self.setParm("name", name)
-        self.setParm("filename", devName)
-        # self.setParm("size", "{0}G".format(coreSize - cacheSize))
-        self.setParm("rw", "write")
-        self.setParm("bs", "128K")
-        self.setParm("iodepth", 8)
-        self.setParm("numjobs", 1)
-        self.setParm("offset", "{0}G".format(cacheSize)) # Do NOT touch caching space
-        self.runTimeControl(runTime)
-        self.execute()
-        return 0
-
 '''
-Used to fill in caching device for hit case:
-a) Am using seq write, with numjobs "1" and iodepth "16"
-b) Size is supposed to be normalized of caching device
-''' 
-class jobFillCachingDevice(jobFIO):
-    def run(self, devName, size):
-        self.setParm("name", "FillCachingDevice")
-        self.setParm("filename", devName)
-        self.setParm("size", "{0}G".format(size))
-        self.setParm("rw", "write")
-        self.setParm("bs", "128K")
-        self.setParm("iodepth", 16)
-        self.setParm("numjobs", 1)
-        self.execute()
-        return 0
-
-# Used to estimate time to fill in caching devie
-class estimateCacheFullTime():
-    numjob  = 1
-    iodepth = 16
-    runTime = 120 # DEBUG 120
+Design Points:
+ 1. Though "wallstone" can be used to do jobs one by one, 
+    I determined to NOT use this flag. As I'd like to keep 
+    the job file seperate in case the user my want to run 
+    the job file by themselves. Without the "wallstone" flag,
+    the logic for rerun manually is more clear
+2. The sub section should be indentified by the block device.
+    Eg. sdb, nvme0n1, intelcas1-1
+'''
+class fioJob():
+    def __init__(self, jobName, baseJobFile):
+        self.jobName = jobName
+        self.jobCfg  = configparser.ConfigParser(allow_no_value=True)
+        self.jobFile = os.path.join(logMgr.getDataDir(), "{0}.{1}.fio"\
+                        .format(jobName, MyTimeStamp.getAppendTime())) 
+        
+        self.jobCfg.read(baseJobFile)
+        
+    # Used to get FIO setting from task.cnf
+    @classmethod
+    def getSetting(cls, work, opt):
+        if taskCfg.queryOpt(work, opt):
+            return taskCfg.queryOpt(work, opt)
+        else:
+            return taskCfg.queryOpt('fio_global', opt)
+    
+    @classmethod
+    def getWorkloadList(cls):
+        worklist = []
+        jobSettingStr = cls.getSetting('read', 'rwlist')
+        words = jobSettingStr.split(",")
+        for word in words:
+            worklist.append(word)
+        return worklist
 
     @classmethod
-    def getTime(cls, cacheDev, coreDev):
-        casAdmin.cfgCacheCorePair(cacheDev, coreDev)
-
-        cacheID   = casAdmin.getIdByCacheDev(cacheDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(coreDev)
-        cacheSize = casAdmin.getCacheSizeInGib(cacheDev)
-        
-        logMgr.info("Start of write speed check, keep {0} seconds".format(cls.runTime))
-        jobTestWriteSpeed().run(inteldisk, 
-                                cacheSize, 
-                                "WriteSpeedCheck",
-                                cls.runTime)
-        logMgr.info("Ending of write speed check")
-        dirtyBlocks = int(casAdmin.getFieldCachePerf(cacheID, "Dirty [4KiB blocks]"))
-        writeSpeedInMb = int((dirtyBlocks * 4)/1024/cls.runTime)
+    def getNumJobList(cls, work):
+        numjobList = []
+        numjobListStr = cls.getSetting(work, 'numjoblist')
+        if "" == numjobListStr:
+            return [8]
+        else:
+            words = numjobListStr.split(",")
+            for word in words:
+                numjobList.append(int(word))
+            return numjobList
     
-        logMgr.info("For first {0} seconds, Write Speed {1} Mib/s".format(cls.runTime, writeSpeedInMb))
-        
-        # Stop cache instance
-        casAdmin.stopCacheInstance(cacheID)
-        return int((cacheSize * 1024 * MAKE_FILL_SAFE_AMPLIFICATION)/writeSpeedInMb) 
-
-class caseRandReadMiss():
-    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
-        self.cacheDev = cacheDev
-        self.coreDev = coreDev
-        self.finish = finish
+    @classmethod
+    def getRunTime(cls, work):
+        timeStr = cls.getSetting(work, 'time')
+        if "" == timeStr:
+            return 600
+        else:
+            return int(timeStr)
+            
+    @classmethod
+    def getBsList(cls, work):
+        bsList = []
+        bsListStr = cls.getSetting(work, 'bslist')
+        if "" == bsListStr:
+            return ['4k']
+        else:
+            words = bsListStr.split(",")
+            for word in words:
+                bsList.append(word)
+            return bsList
     
-    def do(self):
-        # Config cache instance
-        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-        # Get cache/core and cache size for future usage
-        coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
+    @classmethod
+    def getIoDepthList(cls, work):
+        iodepthList = []
+        iodepthListStr = cls.getSetting(work, 'iodepthlist')
+        if "" == iodepthListStr:
+            return [8]
+        else:
+            words = iodepthListStr.split(",")
+            for word in words:
+                iodepthList.append(int(word))
+            return iodepthList
+
+    def saveJobFile(self):
+        with open(self.jobFile, "w") as configfile:
+            logMgr.debug("Save the fio job to {0}".format(self.jobFile))
+            # By default, configParse will add space when doing write, but FIO does NOT accept it
+            self.jobCfg.write(configfile, space_around_delimiters=False)
+            configfile.close()
+
+    def setGlobalOpt(self, optName, optValue = None):
+        self.jobCfg.set('global', optName, str(optValue))
         
-        # Do Rand Read (Miss), set running to 600s as it is quite a long run
-        jobRandRead().run(inteldisk, 
-                            coreSize, 
-                            "RandReadMiss",
-                            RUNTIME_READ_MISS)
+    def setSubOpt(self, subName, optName, optValue = None):
+        self.jobCfg.set(subName, optName, str(optValue))
         
-        self.finish.set()
-        logMgr.info("Ready to notify the finish of FIO tasks")
+    def addOneSub(self, subName):
+        self.jobCfg.add_section(subName)
+        #return 0
+    
+    def getGlobalOpt(self, optName):
+        return self.jobCfg.get('global', optName, fallback="NOT_EXIST")
+    
+    # Try to get opt value from sub job section, or return global
+    def getSubOpt(self, subName, optName):
+        subValue = self.jobCfg.get(subName, optName, fallback="NOT_EXIST")
+        if "NOT_EXIST" == subValue:
+            return self.getGlobalOpt(optName)
+        else:
+            return subValue
+
+    # This is used to get the interested devices for FIO stats
+    def getBlkDeviceList(self):
+        deviceList = ""
+        for section in self.jobCfg.sections():
+            if "global" == section:
+                continue
+            else:
+                if casAdmin.isIntelCasDisk(section):
+                    (cachingDev, coreDev) = casAdmin.getCachingCoreByCasDevice(section)
+                    deviceList = "{0} {1} {2} {3}".format(section, cachingDev, coreDev, deviceList)
+                else:
+                    deviceList = "{0} {1}".format(section, deviceList)
+        return deviceList
+    
+    def isCasDiskJob(self):
+        section = ""
+        for section in self.jobCfg.sections():
+            if "global" == section:
+                continue
+            else:
+                break
+        baseName = os.path.basename(section)
+        if baseName.startswith("intelcas"):
+            return True
+        else:
+            return False
+
+    def run(self):    
+        # Step 1: Save the job file for reference
+        self.saveJobFile()
+
+        # Step 2: Start stats collection for both iostat and cas perf
+        fioFinishEvent = threading.Event()
+        bCasDisk = self.isCasDiskJob()
+    
+        runTime = int(self.getGlobalOpt('runtime'))
+        fioDriveStats = fioIOStats(DEFAULT_CYCLE_TIME, runTime + 120, logMgr.getDataDir(), \
+                                    caseName = self.jobName, kwargs = {'fioJob': self})
+        (ret, iostatThread) = fioDriveStats.start()
+        if ret:
+            logMgr.info("**ERROR** Failed to start thread to collect iostat for FIO job")
+            exit(1)
+
+        if True == bCasDisk:
+            casPerf = casPerfStats(DEFAULT_CYCLE_TIME, runTime + 70, logMgr.getDataDir(), finish = fioFinishEvent)
+            (ret, casPerfThread) = casPerf.start()
+            if (ret):
+                logMgr.info("**ERROR** Fail to start thread for cas perf stats")
+                exit(1)
+    
+        # Step 3: Start FIO job
+        fioCmd = "fio {0}".format(self.jobFile)
+        logMgr.info("Starting fio job: {0}".format(fioCmd))
+        sysAdmin.getOutPutOfCmd(fioCmd)
+        logMgr.info("End of fio job: {0}".format(fioCmd))
+
+        # Step 4: Wait for stats collection to complete
+        fioFinishEvent.set()
+        iostatThread.join()
+
+        if True == bCasDisk:
+            casPerfThread.join()
+
         return 0
 
-class caseRandReadHit():
-    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
-        self.cacheDev = cacheDev
-        self.coreDev = coreDev
-        self.finish = finish
+class benchDevices():
+    def __init__(self, benchName, devicesIn, rwList = []):
+        self._deviceList = devicesIn
+        self._benchName  = benchName
+        if 0 == len(rwList):
+            self._rwList = fioJob.getWorkloadList()
+        else:
+            self._rwList = rwList
+
+    # The child can use here to do some special setting/work before starting one FIO job
+    def preWork(self, job):
+        return 0
     
-    def do(self):
-        # Config Cache Instance
-        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+    # The child can use here to do some special setting/work after finishing one FIO job
+    def postWork(self, job):
+        return 0
+    
+    def startBench(self):
+        logMgr.info("Target devices: {0}".format(self._deviceList))
+        for workload in self._rwList:
+            numJobList  = fioJob.getNumJobList(workload)
+            ioDepthList = fioJob.getIoDepthList(workload)
+            bsList      = fioJob.getBsList(workload)
+            time        = fioJob.getRunTime(workload)
+            for numJob in numJobList:
+                for ioDepth in ioDepthList:
+                    for bs in bsList:
+                        jobName = "{0}.{1}.{2}.{3}jobs.{4}depth"\
+                                .format(self._benchName, workload, bs, numJob, ioDepth)
+                        
+                        job = fioJob(jobName, BASE_JOB_FILE)
+                        job.setGlobalOpt('numjobs', numJob)
+                        job.setGlobalOpt('bs', bs)
+                        job.setGlobalOpt('iodepth', ioDepth)
+                        job.setGlobalOpt('rw', workload)
+                        job.setGlobalOpt('runtime', time)
+                        
+                        for device in self._deviceList:
+                            job.addOneSub(device)
+                            job.setSubOpt(device, 'filename', device)
+                            job.setSubOpt(device, 'size', "{0}G".format(sysAdmin.getBlockDeviceSize(device)))
+                            logMgr.debug("Adding device {0} to fio job".format(device))
 
-        # Get cache/core and cache size for future usage
-        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
-        coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
-        
-        # Fill in the caching device
-        jobFillCachingDevice().run(inteldisk, cacheSize)
-
-        # Do Random Read (Hit)
-        jobRandRead().run(inteldisk, 
-                            cacheSize, 
-                            "RandReadHit",
-                            RUNTIME_READ_MISS)
-        
-        self.finish.set()
+                        self.preWork(job)    
+                        job.run()
+                        self.postWork(job)
         return 0
 
-class caseRandWriteMiss():
-    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
-        self.cacheDev = cacheDev
-        self.coreDev = coreDev
-        self.finish = finish
+# Read Mode: 0 - miss; 1 - hit without warm; 2 - hit with warm;
+class benchCasRead(benchDevices):
+    def __init__(self, benchName, casCfgFile, casDeviceS, rw, readMode):
+        self._mode       = readMode
+        self._casDeviceS = casDeviceS
+        self._rw         = rw
+        self._casCfgFile = casCfgFile
+
+        benchDevices.__init__(self, benchName, casDeviceS, rwList = [rw])
+
+    def preWork(self, job):
+        for casDisk in self._deviceList:
+            if READ_MISS == self._mode:
+                logMgr.info("Reconfig CAS before doing read miss")
+                casAdmin.recfgByCasCfg(self._casCfgFile)
+                job.setSubOpt(casDisk, 'size', "{0}G".format(casAdmin.getCoreSize(casDisk)))
+            else:
+                job.setSubOpt(casDisk, 'size', "{0}G".format(casAdmin.getDirtySize(casDisk)))
     
-    def do(self):
-        # Estimate time needed to fill in the caching device
-        timeToFill = estimateCacheFullTime.getTime(self.cacheDev, self.coreDev)
+class benchCasWrite(benchDevices):
+    def __init__(self, benchName, casCfgFile, casDeviceS, rw, writeMode):
+        self._mode       = writeMode
+        self._rw         = rw
+        self._casCfgFile = casCfgFile
+        benchDevices.__init__(self, benchName, casDeviceS, rwList = [rw])
+    
+    def preWork(self, job):
+        if WRITE_MISS == self._mode:
+            for casDisk in self._deviceList:
+                logMgr.info("Reconfig CAS before doing write miss")
+                casAdmin.recfgByCasCfg(self._casCfgFile)
+                cachingSize = sysAdmin.getBlockDeviceSize(casDisk)
+                job.setSubOpt(casDisk, 'size', "{0}G".format(cachingSize))
+                
+        elif WRITE_HIT == self._mode:
+            for casDisk in self._deviceList:
+                dirtySize = casAdmin.getDirtySize(casDisk)
+                job.setSubOpt(casDisk, 'size', "{0}G".format(dirtySize))
+    
+class warmCache():
+    def __init__(self, casDeviceS):
+        self._casDeviceS = casDeviceS
+
+    def startWarm(self):
+        workload = "write"
+        benchName = "cas.WarmCache"
+        bs = "128K"
+        numJob = 1
+        ioDepth = 8
+        time    = fioJob.getRunTime(workload)
+
+        jobName = "{0}.{1}.{2}.{3}jobs.{4}depth"\
+                                .format(benchName, workload, bs, numJob, ioDepth)
+                        
+        job = fioJob(jobName, BASE_JOB_FILE)
+        job.setGlobalOpt('numjobs', numJob)
+        job.setGlobalOpt('bs', bs)
+        job.setGlobalOpt('iodepth', ioDepth)
+        job.setGlobalOpt('rw', workload)
+        job.setGlobalOpt('runtime', time)
+                        
+        for device in self._casDeviceS:
+            job.addOneSub(device)
+            job.setSubOpt(device, 'filename', device)
+            job.setSubOpt(device, 'size', "{0}G".format(sysAdmin.getBlockDeviceSize(device)))
+
+        job.run()
         
-        # Config cache instance
-        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-        # Get cache/core and cache size for future usage
-        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
-        
-        # Do Random Write (Miss)
-        jobRandWrite().run(inteldisk, 
-                            cacheSize, 
-                            "RandWriteMiss",
-                            timeToFill)
-        
-        self.finish.set()
-        logMgr.info("Ready to notify the finish of FIO tasks")
         return 0
+            
+class benchCASDisk():
+    def __init__(self, casDeviceS, casCfgFile, rwList = []):
+        if 0 == len(rwList):
+            self._rwList = fioJob.getWorkloadList()
+        else:
+            self._rwList = rwList
+        
+        self._casDeviceS = casDeviceS
+        self._casCfgFile = casCfgFile
 
-class caseRandWriteHit():
-    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
-        self.cacheDev = cacheDev
-        self.coreDev = coreDev
-        self.finish = finish
-    
-    def do(self):
-        # Config cache instance
-        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-        # Get cache/core and cache size for future usage
-        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
-        
-        # Fill in the caching device
-        jobFillCachingDevice().run(inteldisk, cacheSize)
-        
-        # Do Random Write (Hit)
-        jobRandWrite().run(inteldisk, 
-                            cacheSize, 
-                            "RandWriteHit",
-                            RUNTIME_READ_MISS)
-        
-        self.finish.set()
-        logMgr.info("Ready to notify the finish of FIO tasks")
-        return 0
+    def startBench(self):
+        # Do real CAS configuration
+        casAdmin.initByCasCfg()
 
-class caseSeqReadMiss():
-    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
-        self.cacheDev = cacheDev
-        self.coreDev = coreDev
-        self.finish = finish
-    
-    def do(self):
-        # Config cache instance
-        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-        # Get cache/core and cache size for future usage
-        coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
-        
-        # Do Rand Read (Miss), set running to 600s as it is quite a long run
-        jobSeqRead().run(inteldisk, 
-                            coreSize, 
-                            "SeqReadMiss",
-                            RUNTIME_READ_MISS)
-        
-        self.finish.set()
-        logMgr.info("Ready to notify the finish of FIO tasks")
-        return 0
+        '''
+        if ("write" in self._rwList) or ("randwrite" in self._rwList):
+            if ("randwrite" in self._rwList):
+                # Do rand write miss
+                benchRndWrite_Miss = benchCasWrite("cas.rndWriteMiss", self._casCfgFile, self._casDeviceS, "randwrite", WRITE_MISS)
+                benchRndWrite_Miss.startBench()
 
-class caseSeqReadHit():
-    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
-        self.cacheDev = cacheDev
-        self.coreDev = coreDev
-        self.finish = finish
-    
-    def do(self):
-        # Config Cache Instance
-        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+                # Do rand write hit
+                benchRndWrite_Hit = benchCasWrite("cas.rndWriteHit", self._casCfgFile, self._casDeviceS, "randwrite", WRITE_HIT)
+                benchRndWrite_Hit.startBench()
 
-        # Get cache/core and cache size for future usage
-        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
+            if ("write" in self._rwList):
+                # Do seq write miss
+                benchSeqWrite_Miss = benchCasWrite("cas.seqWriteMiss", self._casCfgFile, self._casDeviceS, "write", WRITE_MISS)
+                benchSeqWrite_Miss.startBench()
+                # Do seq write hit
+                benchSeqWrite_Hit = benchCasWrite("cas.seqWriteHit", self._casCfgFile, self._casDeviceS, "write", WRITE_HIT)
+                benchSeqWrite_Hit.startBench()
         
-        # Fill in the caching device
-        jobFillCachingDevice().run(inteldisk, cacheSize)
+        if (("read" in self._rwList) or ("randRead" in self._rwList)):
+            warmCacheWork = warmCache(self._casDeviceS)
+            warmCacheWork.startWarm()
 
-        # Do Random Read (Hit)
-        jobSeqRead().run(inteldisk, 
-                        cacheSize, 
-                        "SeqReadHit",
-                        RUNTIME_READ_MISS)
-        
-        self.finish.set()
-        return 0
+        if ("read" in self._rwList):
+            casSeqRead_Hit = benchCasRead("cas.seqReadHit", self._casCfgFile, self._casDeviceS, 'read', READ_HIT)
+            casSeqRead_Hit.startBench()
 
-class caseSeqWriteMiss():
-    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
-        self.cacheDev = cacheDev
-        self.coreDev = coreDev
-        self.finish = finish
-    
-    def do(self):
-        # Estimate time needed to fill in the caching device
-        timeToFill = estimateCacheFullTime.getTime(self.cacheDev, self.coreDev)
-        
-        # Config cache instance
-        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-        # Get cache/core and cache size for future usage
-        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
-        coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
-        
-        # Do Seq Write (Miss)
-        jobSeqWrite().run(inteldisk, 
-                            coreSize, 
-                            "SeqWriteMiss",
-                            timeToFill)
-        
-        self.finish.set()
-        logMgr.info("Ready to notify the finish of FIO tasks")
-        return 0
+        if ("randread" in self._rwList):
+            casRndRead_Hit = benchCasRead('cas.rndReadHit', self._casCfgFile, self._casDeviceS, 'randread', READ_HIT)
+            casRndRead_Hit.startBench()
+        '''
 
-class caseSeqWriteHit():
-    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
-        self.cacheDev = cacheDev
-        self.coreDev = coreDev
-        self.finish = finish
-    
-    def do(self):
-        # Config cache instance
-        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-        # Get cache/core and cache size for future usage
-        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
+        # Reconfig CAS
+        if ("read" in self._rwList):
+            casSeqRead_Miss = benchCasRead('cas.seqReadMiss', self._casCfgFile, self._casDeviceS, 'read', READ_MISS)
+            casSeqRead_Miss.startBench()
         
-        # Fill in the caching device
-        jobFillCachingDevice().run(inteldisk, cacheSize)
-        
-        # Do Seq Write (Hit)
-        jobSeqWrite().run(inteldisk, 
-                            cacheSize, 
-                            "SeqWriteHit",
-                            RUNTIME_READ_MISS)
-        
-        self.finish.set()
-        logMgr.info("Ready to notify the finish of FIO tasks")
-        return 0
+        # Reconfig CAS
+        if ("randread" in self._rwList):
+            casRndRead_Miss = benchCasRead('cas.rndReadMiss', self._casCfgFile, self._casDeviceS, 'rndread', READ_MISS)
+            casRndRead_Miss.startBench()
 
-class caseWriteOverflow():
-    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
-        self.cacheDev = cacheDev
-        self.coreDev = coreDev
-        self.finish = finish
-    
-    def do(self):
-        # Config cache instance
-        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-        # Get cache/core and cache size for future usage
-        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
+        '''
+        # Reconfig CAS
+        casAdmin.redoByCasCfg(casCfg)
+        casDevices = []
+        casMixReadWrite()
+        '''
         
-        # Fill in the caching device
-        jobFillCachingDevice().run(inteldisk, cacheSize)
-        
-        # Do Seq Write (Hit)
-        jobWriteOverflow().run(inteldisk, 
-                                cacheSize,
-                                coreSize, 
-                                "SeqWriteOverflow",
-                                RUNTIME_READ_MISS)
-        
-        self.finish.set()
-        logMgr.info("Ready to notify the finish of FIO tasks")
-        return 0
+        casAdmin.clearByCasCfg()
 
-class baselineCacheCorePair():
-    def __init__(self, cacheDev, coreDev, finish = threading.Event()):
-        self.cacheDev = cacheDev
-        self.coreDev = coreDev
-        self.finish = finish
-    
-    def estimateTotalRunningTime(self, timeToFill):
-        if (timeToFill < RUNTIME_MIN_PER_CAS):
-            timeToFill = RUNTIME_MIN_PER_CAS
-        return int((timeToFill * 6 + RUNTIME_READ_MISS * 3) / 60)
-    
-    def mergeFioOutPut(self):
-        return 0
+class casBaseLineBench():
+    def __init__(self, casCfgFile, caseTYPE, rwList = []):
+        if 0 == len(rwList):
+            self._rwList = fioJob.getWorkloadList()
+        else:
+            self._rwList = rwList
+        self._casCfgFile = casCfgFile
+        self._caseTYPE   = caseTYPE
+        
+    def startBench(self):
+        # Load the cfg file, but NOT do CAS configuration YET
+        casAdmin.loadCasCfg(self._casCfgFile)
 
-    def do(self):
-        # Make sure cache/core is clear
-        if False == casAdmin.isCacheCoreClear(self.cacheDev, self.coreDev):
-            print("**ERROR** Please make sure {0} and {1} NOT used".format(self.cacheDev, self.coreDev))
-            return 1
+        # Bench Raw Devices
+        self._cachingDeviceS  = casAdmin.getAllCachingDevices()
+        self._coreDeviceS     = casAdmin.getAllCoreDevices()
+        self._casDevieS       = casAdmin.getAllCasDevices()
 
-        # Estimate the time for running the test case
-        timeToFill = estimateCacheFullTime.getTime(self.cacheDev, self.coreDev)
-        
-        # Config Cache Instance
-        casAdmin.cfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-        cacheSize = casAdmin.getCacheSizeInGib(self.cacheDev)
-        coreSize = casAdmin.getCoreSizeInGib(self.coreDev)
-        
-        # Do Seq Write (Miss)
-        jobSeqWrite().run(inteldisk, 
-                            cacheSize, 
-                            "SeqWriteMiss",
-                            timeToFill)
-        
-        # Do Seq Write (Hit)
-        jobSeqWrite().run(inteldisk, 
-                            cacheSize, 
-                            "SeqWriteHit",
-                            timeToFill)
-        
-        # Do Random Write (Hit)
-        jobRandWrite().run(inteldisk, 
-                            cacheSize, 
-                            "RandWriteHit",
-                            timeToFill)
-        
-        # Do Seq Read (Hit)
-        jobSeqRead().run(inteldisk, 
-                        cacheSize, 
-                        "SeqReadHit",
-                        timeToFill)
-        
-        # Do Random Read (Hit)
-        jobRandRead().run(inteldisk, 
-                            cacheSize, 
-                            "RandReadHit",
-                            timeToFill)
-        
-        # Do Write for Overflow
-        jobWriteOverflow().run(inteldisk,
-                                cacheSize,
-                                coreSize,
-                                "WriteOverflow",
-                                timeToFill)
-        
-        # Reconfig
-        casAdmin.reCfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+        if ((self._caseTYPE == BENCH_CACHING_ONLY) or (self._caseTYPE == BENCH_ALL)):
+            logMgr.info("Start bench for caching devices")
+            benchAllCaching = benchDevices("cachingDevice", self._cachingDeviceS)
+            benchAllCaching.startBench()
+            logMgr.info("End of bench caching devices")
 
-        # Do Random Write (Miss)
-        jobRandWrite().run(inteldisk, 
-                            coreSize, 
-                            "RandWriteMiss",
-                            timeToFill)
+        if ((self._caseTYPE == BENCH_CORE_ONLY) or (self._caseTYPE == BENCH_ALL)):
+            logMgr.info("Start bench for core devices")
+            benchAllCore = benchDevices("coreDevice", self._coreDeviceS)
+            benchAllCore.startBench()
+            logMgr.info("End of bench core devices")
         
-        # Reconfig
-        casAdmin.reCfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
-        
-        # Do Seq Read (Miss), set running to 600s as it is quite a long run
-        jobSeqRead().run(inteldisk, 
-                        coreSize, 
-                        "SeqReadMiss",
-                        RUNTIME_READ_MISS)
-        
-        # Reconfig
-        casAdmin.reCfgCacheCorePair(self.cacheDev, self.coreDev)
-        inteldisk = casAdmin.getIntelDiskByCoreDev(self.coreDev)
+        # Bench CAS Devices
+        if ((self._caseTYPE == BENCH_CAS_ONLY) or (self._caseTYPE == BENCH_ALL)):
+            logMgr.info("Start bench for cas devices")
+            benchAllCas = benchCASDisk(self._casDevieS, self._casCfgFile)
+            benchAllCas.startBench()
+            logMgr.info("End of bench cas devices")
 
-        # Do Rand Read (Miss), set running to 600s as it is quite a long run
-        jobRandRead().run(inteldisk, 
-                            coreSize, 
-                            "RandReadMiss",
-                            RUNTIME_READ_MISS)
-        
-        self.finish.set()
-        logMgr.info("Ready to notify the finish of FIO tasks")
         return 0

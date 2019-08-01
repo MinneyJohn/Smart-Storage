@@ -66,7 +66,7 @@ class dataBase():
         if 0 == size_in_GB:
             logMgr.info("Failed to retrieve database size by MySQL query, try to fetch from file system")
             cmd = "du -m {0}".format(os.path.join(self.dataDir, self.name))
-            (ret, output) = casAdmin.getOutPutOfCmd(cmd)
+            (ret, output) = sysAdmin.getOutPutOfCmd(cmd)
             lines = output.splitlines()
             if lines:
                 words = lines[0].split()
@@ -86,7 +86,8 @@ class sysbenchTask():
 
         self.db     = db
         self.sbTask = sbTask
-        self.action = action        
+        self.action = action    
+        self.caseName = caseName    
         # As "time" is one parameter of sysbench cmd, so always pull it from opt
         if ("run" == self.action):
             self.opt["time"] = time
@@ -132,16 +133,20 @@ class sysbenchTask():
         fh.write("cycle, threads, tps, qps, latency_95%\n")
         fh.close()
 
+    # This prefix is used for sysbench csv and iostat csv
+    def formCaseNamePrefix(self):
+        workShort = os.path.basename(self.sbTask).replace(".lua", "")
+        threads = self.opt["threads"]
+        bufferPool = mySqlCfg.queryOpt(self.db.instID, "innodb_buffer_pool_size")
+        return("{0}.{1}thds.{2}".format(workShort, threads, bufferPool))
+
     def getCsvFile(self):
         if (self.csvFile):
             return self.csvFile
 
         dbName = self.db.name
-        workShort = os.path.basename(self.sbTask).replace(".lua", "")
-        threads = self.opt["threads"]
         timeStamp = MyTimeStamp.getAppendTime()
-        bufferPool = mySqlCfg.queryOpt(self.db.instID, "innodb_buffer_pool_size")
-        fileName = "{0}.{1}thds.{2}.{3}.csv".format(workShort, threads, bufferPool, timeStamp)
+        fileName = "{0}.{1}.csv".format(self.formCaseNamePrefix(), timeStamp)
         self.csvFile = os.path.join(logMgr.getDataDir(), fileName)
         self.writeHeader()
         return self.csvFile
@@ -155,7 +160,7 @@ class sysbenchTask():
                                                             self.action, \
                                                             self.getDumpPath())
         logMgr.info("Starting: {0}".format(sysbenchCmd))
-        (ret, output) = casAdmin.getOutPutOfCmd(sysbenchCmd)
+        (ret, output) = sysAdmin.getOutPutOfCmd(sysbenchCmd)
         if (0 == ret):
             self.exportResultToCSV()
         
@@ -199,6 +204,7 @@ class sysbenchTask():
                                             finishEvent = sysbenchFinish, kwargs = {'instID': self.db.instID, 'pwd': self.db.pwd}).start()
 
         # Step 1: Start sysbench as a long running task in backgroud
+        logMgr.debug("Try to start background sysbench task")
         sbBackGround = longTask(self.startSysbenchCmd)
         (ret, sbRunning) = sbBackGround.start()
         if ret:
@@ -219,7 +225,7 @@ class sysbenchTask():
                 
             # Step 3: Start iostats collection
             # If it is a CAS drive, also collect caching/core device
-            blkDevice = casAdmin.getBlockDevice(self.db.dataDir)
+            blkDevice = sysAdmin.getBlockDevice(self.db.dataDir)
             if "" == blkDevice:
                 logMgr.info("**ERROR** Could NOT find the block device for {0}\n".format(self.db.dataDir))
                 print("**ERROR** Could NOT find the block device for {0}\n".format(self.db.dataDir))
@@ -228,13 +234,15 @@ class sysbenchTask():
             (cacheID, coreID) = casAdmin.getCacheCoreIdByDevName(blkDevice)
             if (INVALID_CACHE_ID == cacheID):
                 ioStat = ioStats(self.opt["report-interval"], \
-                                self.opt["time"], \
-                                logMgr.getDataDir(), \
+                                self.opt["time"],\
+                                logMgr.getDataDir(),\
+                                caseName = self.formCaseNamePrefix(),\
                                 kwargs = {'devList': blkDevice})
             else:
                 ioStat = ioStats(self.opt["report-interval"], \
                                 self.opt["time"], \
-                                logMgr.getDataDir(), \
+                                logMgr.getDataDir(),\
+                                caseName = self.formCaseNamePrefix(),\
                                 kwargs = {'cacheID': cacheID})
 
                 # Also start cas perf collection for CAS drives
@@ -353,12 +361,15 @@ class defaultBench():
             self.sbTaskList = []
             loadList = re.split(",", workLoadListStr)
             for load in loadList:
-                if load in self.validWorkload:
-                    self.sbTaskList.append(load)
+                #if load in self.validWorkload:
+                # Do not validate the workload file as on different os, it may be in different places
+                self.sbTaskList.append(load)
 
     def triggerSbTask(self):
+        print("DEBUG - triggerSbTask - threadList {0}".format(self.threadsNumList))
+        print("DEBUG - triggerSbTask - taskList {0}".format(self.sbTaskList))
         for threadNum in self.threadsNumList:
-            for sbTask in self.sbTaskList:    
+            for sbTask in self.sbTaskList:
                 sbRunTask = sysbenchTask(self.db, sbTask, self.time, action="run")
                 sbRunTask.setOpt("threads", threadNum)
                 sbRunTask.setOpt("report-interval", self.statsCycle)
@@ -377,6 +388,8 @@ class defaultBench():
         # Startup the cache instance
         # If specify the skipPrepare, the database should be ready
         if False == self.skipPrepare:
+            print("DEBUG - Will Skip Prepare Phase for database")
+            logMgr.debug("Will Skip Prepare Phase for database, please make sure your DB is ready")
             if mySqlInst.genesis(self.db.instID):
                 return -1
     
@@ -396,7 +409,7 @@ class defaultBench():
             self.triggerSbTask()
         else:
             # Get the valid of buffer pool size list
-            totalMem = casAdmin.getTotalMemory()
+            totalMem = sysAdmin.getTotalMemory()
             dbSize = self.db.getSizeInGB()
             logMgr.info("Size of DB is {0}GB, and total physical memory is {1}GB".format(dbSize, totalMem))
             bufferSizeList = self.getBufferSizeList(totalMem, dbSize)
@@ -428,26 +441,26 @@ class benchOneBlockDevice(defaultBench):
             print("Dangerous, {0} exists, please remove it first\n".format(self.db.dataDir))
             exit(0)
         
-        if casAdmin.isBlkMounted(self.blkDev):
+        if sysAdmin.isBlkMounted(self.blkDev):
             logMgr.info("**ERROR* Block Device Still Mounted: {0}".format(self.blkDev))
             print("**ERROR* Block Device Still Mounted: {0}".format(self.blkDev))
             exit(0)
         
         # mkfs on blkDev
-        fsType = casAdmin.getBlkFSType(self.blkDev)
+        fsType = sysAdmin.getBlkFSType(self.blkDev)
         if "" == fsType:
-            ret = casAdmin.mkFS(self.blkDev, "ext4")
+            ret = sysAdmin.mkFS(self.blkDev, "ext4")
             if ret:
                 return ret
         
         #Create Dir
         mkdev = "mkdir -p {0}".format(self.db.dataDir)
-        (ret, output) = casAdmin.getOutPutOfCmd(mkdev)
+        (ret, output) = sysAdmin.getOutPutOfCmd(mkdev)
         if ret:
             return ret
         
         # Mount blkDev to target Dir
-        ret = casAdmin.doMount(self.blkDev, self.db.dataDir)
+        ret = sysAdmin.doMount(self.blkDev, self.db.dataDir)
         if ret:
             return ret
     
@@ -456,13 +469,13 @@ class benchOneBlockDevice(defaultBench):
         mySqlInst.stop(self.db.instID)
 
         # Unmount the dataDir
-        ret = casAdmin.doUnMount(self.db.dataDir)
+        ret = sysAdmin.doUnMount(self.db.dataDir)
         if (ret):
             return ret
         
         # Remove the datadir
         command = "rm -fr {0}".format(self.db.dataDir)
-        (ret, output) = casAdmin.getOutPutOfCmd(command)
+        (ret, output) = sysAdmin.getOutPutOfCmd(command)
 
         return ret
 
@@ -539,15 +552,15 @@ class benchCAS():
     
         # Step 3: Bench CAS Dev
         ## Configure CAS
-        casAdmin.cfgCacheCorePair(casAdmin.getBlkFullPath(self.caching), casAdmin.getBlkFullPath(self.core))
-        self.casDisk = casAdmin.getIntelDiskByCoreDev(casAdmin.getBlkFullPath(self.core))
+        casAdmin.cfgCacheCorePair(sysAdmin.getBlkFullPath(self.caching), sysAdmin.getBlkFullPath(self.core))
+        self.casDisk = casAdmin.getCasDeviceByCaching(sysAdmin.getBlkFullPath(self.core))
         if self.casDisk:
             casBench = benchOneBlockDevice(self.db, self.time)
             casBench.startBench(kwargs = {'blkDev': self.casDisk})
             casBench.clearSystem()
         
         # Step 3.1: Stop CAS Cache Instance
-        cacheID = casAdmin.getIdByCacheDev(casAdmin.getBlkFullPath(self.caching))
+        cacheID = casAdmin.getIdByCacheDev(sysAdmin.getBlkFullPath(self.caching))
         casAdmin.stopCacheInstance(cacheID)
 
         return 0

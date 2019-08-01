@@ -38,6 +38,8 @@ class cycleStatsCollector:
 
     # No need to redefine
     def start(self):
+        logMgr.info("Starting {0}, cycleTime {1} and runningTime {2}"\
+                    .format(self.__class__.__name__, self._cycleTime, self._runTime))
         self.handleKwargs(self._kwargs)
         self.getCsvFile()
         runTask = scheduleTask(self.cycleRun, self._cycleTime, self._runTime, finishEvent = self._finish)
@@ -104,7 +106,7 @@ class cycleStatsCollector:
 class casPerfStats(cycleStatsCollector):
     def getRawStats(self, cache_id, core_id): # class specific function
         stats_cmd = 'casadm -P -i {0} -j {1} -o csv'.format(cache_id, core_id)
-        (ret, output) = casAdmin.getOutPutOfCmd(stats_cmd)
+        (ret, output) = sysAdmin.getOutPutOfCmd(stats_cmd)
         if 0 == ret:
             return output
         else:
@@ -112,7 +114,7 @@ class casPerfStats(cycleStatsCollector):
         
     def resetPerfStat(self, cache_id, core_id):
         reset_cmd = 'casadm -Z -i {0} -j {1}'.format(cache_id, core_id)
-        (ret, output) = casAdmin.getOutPutOfCmd(reset_cmd)
+        (ret, output) = sysAdmin.getOutPutOfCmd(reset_cmd)
         if 0 == ret:
             return output
         else:
@@ -155,8 +157,10 @@ class casPerfStats(cycleStatsCollector):
     def getCycleOutPut(self):
         raw_info = ""
 
-        (cache_inst_list, cache_volume_list) = casAdmin.fetchCacheVolumeSet()
-        for cache_volume in cache_volume_list:
+        casDevices = casAdmin.getAllCasDevices()
+
+        for casDisk in casDevices:
+            (cacheID, coreID) = casAdmin.getCacheCoreIdByDevName(casDisk)
             if (INVALID_CACHE_ID == self._filterCacheID):
                 pass
             elif (self._filterCacheID == cache_volume.cacheID):
@@ -164,12 +168,12 @@ class casPerfStats(cycleStatsCollector):
             else:
                 continue
             
-            raw_info = self.getRawStats(cache_volume.cacheID, cache_volume.coreID)
+            raw_info = self.getRawStats(cacheID, coreID)
             
             # Set kwargs for one line parsing
-            self.setParseKwargs({'cacheID': cache_volume.cacheID})
+            self.setParseKwargs({'cacheID': cacheID})
 
-            self.resetPerfStat(cache_volume.cacheID, cache_volume.coreID)
+            self.resetPerfStat(cacheID, coreID)
         return raw_info.splitlines()
 
 class mysqlBufferPoolStats(cycleStatsCollector):
@@ -259,13 +263,14 @@ class mysqlBufferPoolStats(cycleStatsCollector):
         return True
 
 class longRunStatsCollector():
-    def __init__(self, cycleTime, runTime, dataDir, kwargs = {}):
+    def __init__(self, cycleTime, runTime, dataDir, caseName = "", kwargs = {}):
         self._cycleTime = cycleTime
         self._runTime   = runTime
         self._dataDir   = dataDir
         self._kwargs    = kwargs
         self._csvFile   = ""
         self._hasHeader = False
+        self._caseName  = caseName
 
         # Args for parsing one line
         self._kwargs_parse = {}
@@ -281,9 +286,16 @@ class longRunStatsCollector():
 
     def getCsvFile(self):
         if "" == self._csvFile:
-            self._csvFile = os.path.join(self._dataDir, \
+            if self._caseName:
+                self._csvFile = os.path.join(self._dataDir, \
+                                        "{0}_{1}_{2}.csv".\
+                                        format(self.__class__.__name__,\
+                                                self._caseName,\
+                                                MyTimeStamp.getAppendTime()) )
+            else:
+                self._csvFile = os.path.join(self._dataDir, \
                                         "{0}_{1}.csv".\
-                                        format(self.__class__.__name__, 
+                                        format(self.__class__.__name__,\
                                                 MyTimeStamp.getAppendTime()) )
         return self._csvFile     
     
@@ -302,9 +314,11 @@ class longRunStatsCollector():
     def runStats(self):
         runCmd = self.generateRunCommand()
 
+        logMgr.info("Starting {0}".format(runCmd))
         process = subprocess.Popen(shlex.split(runCmd), stdout=subprocess.PIPE)
         while True:
             line = process.stdout.readline().decode()
+            #logMgr.debug("Line: {0}".format(line))
             if line == '' and process.poll() is not None:
                 logMgr.debug("Finish of {0}".format(runCmd))
                 break
@@ -323,35 +337,18 @@ class longRunStatsCollector():
         logMgr.debug("Time Up, Exit {0}".format(runCmd))
         return rc
 
-class ioStats(longRunStatsCollector):   
+class ioStats(longRunStatsCollector):
     def getAllDev(self):
-        (cache_instance_list, cache_volume_list) = casAdmin.fetchCacheVolumeSet()
-        dev_list = ""
-
-        for cache_volume in cache_volume_list:
-            dev_list = "{0} {1} {2}".format(dev_list, cache_volume.coreDisk, cache_volume.casDisk)
-
-        for cache_instance in cache_instance_list:
-            dev_list = "{0} {1}".format(dev_list, cache_instance.cacheDisk)
-
-        return dev_list
+        coreDiskS  = casAdmin.getAllCoreDevices(cacheID_filter = cache_id)
+        casDiskS   = casAdmin.getAllCasDevices(cacheID_filter = cache_id)
+        cacheDiskS = casAdmin.getAllCachingDevices(cacheID_filter = cache_id)        
+        return "{0}".format(" ".join(str(x) for x in  coreDiskS+casDiskS+cacheDiskS))
     
     def getDevListByCacheId(self, cache_id):
-        (cache_instance_list, cache_volume_list) = casAdmin.fetchCacheVolumeSet()
-        coreDisk = ""
-        casDisk = ""
-        cacheDisk = ""
-
-        for cache_volume in cache_volume_list:
-            if cache_id == cache_volume.cacheID:
-                coreDisk = cache_volume.coreDisk
-                casDisk  = cache_volume.casDisk
-                
-        for cache_instance in cache_instance_list:
-            if cache_id == cache_instance.cacheID:
-                cacheDisk = cache_instance.cacheDisk
-                
-        return "{0} {1} {2}".format(coreDisk, casDisk, cacheDisk)
+        coreDiskS  = casAdmin.getAllCoreDevices(cacheID_filter = cache_id)
+        casDiskS   = casAdmin.getAllCasDevices(cacheID_filter = cache_id)
+        cacheDiskS = casAdmin.getAllCachingDevices(cacheID_filter = cache_id)        
+        return "{0}".format(" ".join(str(x) for x in  coreDiskS+casDiskS+cacheDiskS))
     
     def handleKwargs(self, kwargs):
         if "devList" in kwargs:
@@ -364,6 +361,7 @@ class ioStats(longRunStatsCollector):
         else:
             self._cacheID = INVALID_CACHE_ID
         
+        logMgr.debug("IOSTAT's kwargs is devList: {0}, cacheID: {1}".format(self._devList, self._cacheID))
         self._hitCycle = 0
         logMgr.debug("Specify iostat for <devList, cacheID>: <{0}, {1}>".format(self._devList, self._cacheID))
             
@@ -416,8 +414,54 @@ class ioStats(longRunStatsCollector):
         
         # Set kwargs for one line parsing
         self.setParseKwargs({'devList': self._devToCollect})
+        logMgr.debug("Starting: {0}".format(iostatCmd))
         return iostatCmd
 
+class fioIOStats(ioStats):
+    def handleKwargs(self, kwargs):
+        if "fioJob" in kwargs:
+            self._fioJob = kwargs['fioJob']
+            self._devList = kwargs['fioJob'].getBlkDeviceList()
+            self._hitCycle = 0
+    
+    def generateHeader(self, line):
+        if line:
+            if line.startswith('Device:'):
+                header = line.replace('Device:', 'Device')
+                header = re.sub("\s+", ",", header)
+                new_header = "{0}, {1}, {2}, {3}, {4}, {5}, {6}\n"\
+                            .format("Date", "Time", "rw", "bs", "iodepth", "numjobs", header)
+                outF = open(self.getCsvFile(), "w+")
+                outF.writelines(new_header)
+                outF.close()
+                return True
+        return False
+
+    def parseOneLine(self, line):
+        # logMgr.debug("Parsing {0}".format(line))
+        if "devList" in self._kwargs_parse:
+            devList = self._kwargs_parse['devList']
+        else:
+            return ""
+
+        if line.startswith('Device:'):
+            self._hitCycle += 1
+        
+        if (1 >= self._hitCycle): # Only record since 2 cycles
+            return ""
+    
+        words = line.split()
+        if len(words) and (words[0] in devList):
+            line = re.sub("\s+", ",", line)
+            (dateStr, timeStr) = MyTimeStamp.getDateAndTime(SECOND)
+            rw = self._fioJob.getSubOpt(words[0], 'rw')
+            bs = self._fioJob.getSubOpt(words[0], 'bs')
+            iodepth = self._fioJob.getSubOpt(words[0], 'iodepth')
+            numjobs = self._fioJob.getSubOpt(words[0], 'numjobs')
+            new_line = "{0},{1},{2},{3},{4},{5},{6}\n"\
+                        .format(dateStr, timeStr, rw, bs, iodepth, numjobs, line)
+            return new_line
+        return ""    
 
 '''
 root@sm114 Smart-Storage]# mpstat 2 2

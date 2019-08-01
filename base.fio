@@ -1,0 +1,10 @@
+# Base FIO Job, will contain the setting for all FIO jobs
+
+[global]
+name=base-fio
+direct=0
+ioengine=libaio
+time_based=1
+
+numjobs=8
+runtime=120
