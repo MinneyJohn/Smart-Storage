@@ -326,6 +326,7 @@ class benchDevices():
                         
                         for device in self._deviceList:
                             job.addOneSub(device)
+                            job.setSubOpt(device, 'name', os.path.basename(device))
                             job.setSubOpt(device, 'filename', device)
                             job.setSubOpt(device, 'size', "{0}G".format(sysAdmin.getBlockDeviceSize(device)))
                             logMgr.debug("Adding device {0} to fio job".format(device))
