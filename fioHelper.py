@@ -222,13 +222,18 @@ class fioJob():
         else:
             return subValue
 
+    # This is used to get the interested devices for FIO stats
     def getBlkDeviceList(self):
         deviceList = ""
         for section in self.jobCfg.sections():
             if "global" == section:
                 continue
             else:
-                deviceList = "{0} {1}".format(section, deviceList)
+                if casAdmin.isIntelCasDisk(section):
+                    (cachingDev, coreDev) = casAdmin.getCachingCoreByCasDevice(section)
+                    deviceList = "{0} {1} {2} {3}".format(section, cachingDev, coreDev, deviceList)
+                else:
+                    deviceList = "{0} {1}".format(section, deviceList)
         return deviceList
     
     def isCasDiskJob(self):
@@ -270,9 +275,8 @@ class fioJob():
         # Step 3: Start FIO job
         fioCmd = "fio {0}".format(self.jobFile)
         logMgr.info("Starting fio job: {0}".format(fioCmd))
-        
         sysAdmin.getOutPutOfCmd(fioCmd)
-        
+        logMgr.info("End of fio job: {0}".format(fioCmd))
 
         # Step 4: Wait for stats collection to complete
         fioFinishEvent.set()
@@ -415,6 +419,7 @@ class benchCASDisk():
         # Do real CAS configuration
         casAdmin.initByCasCfg()
 
+        '''
         if ("write" in self._rwList) or ("randwrite" in self._rwList):
             if ("randwrite" in self._rwList):
                 # Do rand write miss
@@ -444,12 +449,13 @@ class benchCASDisk():
         if ("randread" in self._rwList):
             casRndRead_Hit = benchCasRead('cas.rndReadHit', self._casCfgFile, self._casDeviceS, 'randread', READ_HIT)
             casRndRead_Hit.startBench()
+        '''
 
         # Reconfig CAS
         if ("read" in self._rwList):
             casSeqRead_Miss = benchCasRead('cas.seqReadMiss', self._casCfgFile, self._casDeviceS, 'read', READ_MISS)
             casSeqRead_Miss.startBench()
-
+        
         # Reconfig CAS
         if ("randread" in self._rwList):
             casRndRead_Miss = benchCasRead('cas.rndReadMiss', self._casCfgFile, self._casDeviceS, 'rndread', READ_MISS)

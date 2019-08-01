@@ -33,6 +33,7 @@ def setupArgsParser():
                             help="By default, all test cases would be covered. "\
                                 "Or you can choose one single test caes to run:"\
                                 "{0}".format(validCaseList))
+    arg_parser.add_argument('--debug', default=False, help="Enable debug mode\n", action="store_true")
     return 0
 
 def verifyArgs(args):
@@ -49,14 +50,16 @@ if __name__ == "__main__":
     verifyArgs(args)
 
     # Fetch args
-    output   = args.output
-    case_str = args.case
-    cascfg   = args.cascfg
+    output    = args.output
+    case_str  = args.case
+    cascfg    = args.cascfg
+    debugMode = args.debug
 
     # Setup logfile and dataDir
     logMgr.setDataDir(output)
     logFileName = os.path.join(logMgr.getDataDir(), time.strftime("casBaseLineTest-%Y-%m-%d-%Hh-%Mm.log"))
     logMgr.setUpRunningLog(logFileName)
+    logMgr.setDebug(debugMode)
     logMgr.info("\n\n")
 
     # Print notice msg for the user

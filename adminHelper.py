@@ -418,6 +418,14 @@ class casAdmin():
             logMgr.debug("Do NOT find the caching/core device ID for blkdev {0}".format(casDisk))
             return (INVALID_CACHE_ID, INVALID_CACHE_ID)
     
+    @classmethod
+    def isIntelCasDisk(cls, blkDev):
+        baseName = os.path.basename(blkDev)
+        if baseName.startswith("intelcas"):
+            return True
+        else:
+            return False
+    
 # Used to config/prepare cache environment
 class sysAdmin():
     @classmethod

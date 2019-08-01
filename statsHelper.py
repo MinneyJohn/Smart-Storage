@@ -314,6 +314,7 @@ class longRunStatsCollector():
     def runStats(self):
         runCmd = self.generateRunCommand()
 
+        logMgr.info("Starting {0}".format(runCmd))
         process = subprocess.Popen(shlex.split(runCmd), stdout=subprocess.PIPE)
         while True:
             line = process.stdout.readline().decode()
