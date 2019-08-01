@@ -350,14 +350,9 @@ class defaultBench():
             self.sbTaskList = []
             loadList = re.split(",", workLoadListStr)
             for load in loadList:
-<<<<<<< HEAD
                 #if load in self.validWorkload:
                 # Do not validate the workload file as on different os, it may be in different places
                 self.sbTaskList.append(load)
-=======
-                self.sbTaskList.append(load)
-                # if load in self.validWorkload:
->>>>>>> 03da2fff6b92355fdd7ee5726c8ef6a83063b200
 
     def triggerSbTask(self):
         print("DEBUG - triggerSbTask - threadList {0}".format(self.threadsNumList))

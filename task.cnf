@@ -5,8 +5,8 @@
 # read,write,randread,randwrite,randrw
 [fio_global]
 #rwList=read,randread,write,randwrite
-rwList=read,randread,write,randwrite
-time=300
+rwList=read
+time=60
 
 [read]
 numjoblist=1
