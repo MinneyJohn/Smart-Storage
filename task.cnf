@@ -12,8 +12,7 @@ ROWS=1000000
 
 # read,write,randread,randwrite,randrw
 [fio_global]
-#rwList=read,randread,write,randwrite
-rwList=read
+rwList=read,randread,write,randwrite
 time=60
 
 [read]
@@ -23,12 +22,15 @@ bslist=128k
 
 [write]
 numjoblist=1
+iodepthlist=8
 bslist=64k
 
 [randwrite]
 numjoblist=8
-bslist=4k
+iodepthlist=8
+bslist=4k,8k
 
 [randread]
 numjoblist=8
+iodepthlist=8,16
 bslist=4k
