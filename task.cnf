@@ -1,6 +1,14 @@
 [sysbench]
-#THREAD_NUM_LIST=100,128
-#DYNAMIC_BUFFER_POOL_SIZE=False
+THREAD_NUM_LIST=128
+STATS_CYCLE=5
+DB_NAME=sbtest
+PWD=intel123
+WORK_LOAD=/usr/share/sysbench/oltp_read_write.lua
+TABLE_NUM=10
+ROWS=1000000
+#DYNAMIC_BUFFER_POOL_SIZE=True
+#BUFFER_CHANGE_STEP=0.05
+#EXTRA_MEM_LIST=10,20
 
 # read,write,randread,randwrite,randrw
 [fio_global]

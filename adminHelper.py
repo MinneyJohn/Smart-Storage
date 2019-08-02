@@ -680,9 +680,17 @@ class mySqlInst():
         if ("" == datadir):
             return -1
 
+        if False == os.path.exists(datadir):
+            logMgr.info("**ERROR** Please make sure the data dir exist")
+            print("**ERROR** Please make sure datadir {0} exist".format(datadir))
+            exit(1)
+
+        # The data should be created and mounted first
+        '''
         (ret, output) = sysAdmin.getOutPutOfCmd("sudo mkdir -p {0}".format(datadir))
         if (ret):
             return ret
+        '''
         
         (ret, output) = sysAdmin.getOutPutOfCmd("sudo rm -fr {0}/*".format(datadir))
         if (ret):

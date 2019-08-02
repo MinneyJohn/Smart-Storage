@@ -54,6 +54,9 @@ class dataBase():
         sizeStsm = "SELECT table_schema dbName, ROUND(SUM(data_length + index_length) / 1024 / 1024 /1024, 2) Size"\
                    " FROM information_schema.tables  WHERE table_schema = \\\"{0}\\\" \G".format(self.name)
         (ret, output) = mySqlInst.executeSqlStsm(self.instID, sizeStsm, self.pwd)
+        if (ret):
+            return size_in_GB
+
         lines = output.splitlines()
         for line in lines:
             line = line.strip(" ").rstrip(" \n").replace(" ", "")
@@ -74,6 +77,13 @@ class dataBase():
                 size_in_GB = int(int(words[0])/1024)
                 logMgr.info("In FileSystem, the database is {0}G".format(size_in_GB))
         return size_in_GB 
+    
+    def isReady(self):
+        sizeDB = self.getSizeInGB()
+        if (0 >= sizeDB):
+            return False
+        else:
+            return True
 
 '''
 This class is an abstract of one sysbench task:
@@ -390,16 +400,23 @@ class defaultBench():
         if False == self.skipPrepare:
             logMgr.info("Starting Prepare DB")
             if mySqlInst.genesis(self.db.instID):
-                return -1
+                logMgr.info("**ERROR** Failed to initial DB, exit the test")
+                exit(1)
     
             # Create dataBase
             if self.db.createDB():
-                return -1
+                logMgr.info("**ERROR** Failed to create DB, exit the test")
+                exit(1)
         
             if self.db.prepareData():
-                return -1       
+                logMgr.info("**ERROR** Failed to create DB, exit the test")
+                exit(1)     
+        elif self.db.isReady():
+            logMgr.info("Skip Prepare Phase for database, your DB should be ready now")
         else:
-            logMgr.debug("Prepare Phase for database, your DB should be ready")
+            logMgr.info("**ERROR** Your DB is NOT ready")
+            print("**ERROR** Your DB is NOT ready yet")
+            exit(1)
         
         return 0
 
@@ -482,8 +499,8 @@ class benchOneBlockDevice(defaultBench):
 
     def handleKwargs(self, kwargs):
         self.kwargs = kwargs
-        if "blkDev" in self.kwargs:
-            self.blkDev = self.kwargs['blkDev']
+        if "disk" in self.kwargs:
+            self.blkDev = self.kwargs['disk']
             logMgr.info("Will run sysbench against block device {0}".format(self.blkDev))
         else:
             return 1
@@ -512,7 +529,7 @@ class benchOneBlockDevice(defaultBench):
         return 0
 
 class benchCAS():
-    def __init__(self, db, time):
+    def __init__(self, db, time, skipPrepare = False):
         self.db   = db
         self.time = time
     
@@ -543,21 +560,21 @@ class benchCAS():
 
         # Step 1: Bench Caching Dev
         cachingBench = benchOneBlockDevice(self.db, self.time)
-        cachingBench.startBench(kwargs = {'blkDev': self.caching})
+        cachingBench.startBench(kwargs = {'disk': self.caching})
         cachingBench.clearSystem()
 
         # Step 2: Bench Core Dev
         coreBench = benchOneBlockDevice(self.db, self.time)
-        coreBench.startBench(kwargs = {'blkDev': self.core})
+        coreBench.startBench(kwargs = {'disk': self.core})
         coreBench.clearSystem()
     
         # Step 3: Bench CAS Dev
         ## Configure CAS
         casAdmin.cfgCacheCorePair(sysAdmin.getBlkFullPath(self.caching), sysAdmin.getBlkFullPath(self.core))
-        self.casDisk = casAdmin.getCasDeviceByCaching(sysAdmin.getBlkFullPath(self.core))
+        self.casDisk = casAdmin.getCasDeviceByCaching(sysAdmin.getBlkFullPath(self.caching))
         if self.casDisk:
             casBench = benchOneBlockDevice(self.db, self.time)
-            casBench.startBench(kwargs = {'blkDev': self.casDisk})
+            casBench.startBench(kwargs = {'disk': self.casDisk})
             casBench.clearSystem()
         
         # Step 3.1: Stop CAS Cache Instance
@@ -567,15 +584,15 @@ class benchCAS():
         return 0
 
 class benchMultipleBlkDevice():
-    def __init__(self, db, time):
+    def __init__(self, db, time, skipPrepare = False):
         self.db   = db
         self.time = time
     
     def handleKwargs(self, kwargs):
         self.kwargs = kwargs
         self.blkList = []
-        if "blkList" in self.kwargs:
-            blkListStr = self.kwargs['blkList']
+        if "diskset" in self.kwargs:
+            blkListStr = self.kwargs['diskset']
             blkListStr = re.sub("\s+", "", blkListStr)
             words = blkListStr.split(",")
             for word in words:
