@@ -14,6 +14,7 @@ import fnmatch
 from adminHelper import *
 from statsHelper import *
 
+RUNNING_TO_END = 360000
 
 '''
 This class is an abstrat of one database
@@ -87,7 +88,6 @@ class sysbenchTask():
         self.db     = db
         self.sbTask = sbTask
         self.action = action    
-        self.caseName = caseName    
         # As "time" is one parameter of sysbench cmd, so always pull it from opt
         if ("run" == self.action):
             self.opt["time"] = time
@@ -196,7 +196,7 @@ class sysbenchTask():
         sysbenchFinish = threading.Event()
 
         # Step 0: Try to purge bin logs to save space
-        if self.opt['time']:
+        if ('time' in self.opt) and self.opt['time']:
             (ret, purgeGoing) = scheduleTask(mySqlInst.purgeBinLog, DEFAULT_CYCLE_TIME, self.opt['time'], \
                                             finishEvent = sysbenchFinish, kwargs = {'instID': self.db.instID, 'pwd': self.db.pwd}).start()
         else:
@@ -388,8 +388,7 @@ class defaultBench():
         # Startup the cache instance
         # If specify the skipPrepare, the database should be ready
         if False == self.skipPrepare:
-            print("DEBUG - Will Skip Prepare Phase for database")
-            logMgr.debug("Will Skip Prepare Phase for database, please make sure your DB is ready")
+            logMgr.info("Starting Prepare DB")
             if mySqlInst.genesis(self.db.instID):
                 return -1
     
@@ -399,6 +398,8 @@ class defaultBench():
         
             if self.db.prepareData():
                 return -1       
+        else:
+            logMgr.debug("Prepare Phase for database, your DB should be ready")
         
         return 0
 

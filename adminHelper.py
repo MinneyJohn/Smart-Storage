@@ -826,8 +826,10 @@ class taskCfg():
             return ""
     
     @classmethod
-    def showOpt(cls):
+    def showOpt(cls, sectionName = ""):
         print("Your bench mark is configured as follows:")
         for section in cls.taskCfg:
+            if (sectionName and (section != sectionName)):
+                continue
             for opt in cls.taskCfg[section]:
                 print("{0}: {1}".format(opt, cls.queryOpt(section, opt)))

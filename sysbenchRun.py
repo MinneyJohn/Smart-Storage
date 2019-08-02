@@ -81,19 +81,6 @@ def verifyArgs(args):
         exit(1)
 
 if __name__ == "__main__": 
-    # DEBUG
-    logMgr.setDataDir("/home/john")
-    logMgr.setUpRunningLog(os.path.join(logMgr.getDataDir(), "running.log"))
-
-    casCfg = intelCasCfg("intelcas.conf")
-    casCfg.showAll()
-
-    taskCfg.showOpt()
-
-    benchRaw = fioHelper.benchCasRawDevices(casCfg)
-    benchRaw.startBench()
-    exit(0)
-
     arg_parser = argparse.ArgumentParser()
     setupArgsParser()
     args = arg_parser.parse_args()
@@ -109,7 +96,7 @@ if __name__ == "__main__":
 
     print("Benchmark is running in progress..............")
     print("You can get your log and perf data in: {0}".format(logMgr.getDataDir()))
-    taskCfg.showOpt()
+    taskCfg.showOpt("sysbench")
 
     dbName = taskCfg.queryOpt("sysbench", "DB_NAME")
     pwd = taskCfg.queryOpt("sysbench", "PWD")
