@@ -26,7 +26,7 @@ def setupArgsParser():
     arg_parser.add_argument('--output', metavar='dir', required=True,\
                             help='The dir to contain the perf data, eg. /home/you')
     arg_parser.add_argument('--cascfg', metavar='casCfg', required=False,\
-                            default='/etc/intelcas/intelcas.conf',\
+                            default=CAS_CFG_FILE,\
                             help='The intelcas.conf file to use for test')
     arg_parser.add_argument('--case', metavar='testCase', required=False,\
                             default='all', choices=validCaseList,\
@@ -71,12 +71,15 @@ Please do NOT do CAS configuration during this test progress"""\
 
     print(notice_msg)
 
+    logMgr.info("Prefix for CAS disk is {0}".format(CAS_DISK_PRE))
+    logMgr.info("Default CAS Cfg File is {0}".format(CAS_CFG_FILE))
+    
     logMgr.info("Entry Point to start CAS baseline test")
-    logMgr.info("CAS cfgfile is {0}".format(cascfg))
+    logMgr.info("Will cfgfile {0}".format(cascfg))
     logMgr.info("Will cover test case: {0}".format(case_str))
     
     caseID = getBenchCaseID(case_str)
-    casBench = casBaseLineBench("/etc/intelcas/intelcas.conf", caseID)
+    casBench = casBaseLineBench(cascfg, caseID)
     casBench.startBench()
     
     logMgr.info("Exit Point of CAS baseline Test\n\n\n")

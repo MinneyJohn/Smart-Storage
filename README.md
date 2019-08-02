@@ -187,36 +187,91 @@ How to understand the options:
 The tool casBaseLine.py can be used to trigger one baseline performance validation against one cache/core pair.
 
 Before running this tool, you need to do:
-* Install Intel CAS 
+* Install Open CAS 
 * Install fio
+* Install Python 3
 
-How to use this command:
-[root@apss117t Smart-Storage]# python3 casBaseLine.py -h
-usage: casBaseLine.py [-h] -cache cacheDev -core coreDev -output dir
+Configure Your Test:
+* Prepare */etc/opencas/opencas.conf*
+  * Refer to https://open-cas.github.io/guide_configuring.html for details
+  * You should specify the caching device and core devices you want to test
+  * Multiple caching devices and cores are supported
+* Prepare *task.cnf* in the directory where you download this tool set
+  * This file is used to control how your FIO should run
+
+
+Example of */etc/opencas/opencas.conf*:
+* With this conf file, the test will use */dev/nvme2n1* as caching device and */dev/sdc* as the core device
+* By default, this test will be do:
+  * Run FIO against caching device */dev/nvme2n1*, collect its IOPS/BW
+  * Run FIO against core device */dev/sdc*, collect its IOPS/BW
+  * Configure device *cas1-1* using caching device */dev/nvme2n1* and core device */dev/sdc*, then run FIO against *cas1-1* and collect its IOPS/BW
+```
+[caches]
+## Cache ID     Cache device                            Cache mode      Extra fields (optional)
+1               /dev/nvme2n1 WB
+
+## Core devices configuration
+[cores]
+## Cache ID     Core ID         Core device
+1               1               /dev/sdc
+```
+
+Example of *task.cnf*
+* The test will cover FIO workload *read,randread,write,randwrite*
+* For *read*, will try FIO with *"numjob=1", "iodepth=8" and "bs=128K"*
+* For *randread*, will try FIO with *"numjob=8" and "bs=4k"/"bs=8k"*
+```
+[fio_global]
+rwList=read,randread,write,randwrite
+time=600
+
+[read]
+numjoblist=1
+iodepthlist=8
+bslist=128k
+
+[write]
+numjoblist=1
+iodepthlist=8
+bslist=64k
+
+[randwrite]
+numjoblist=8,16
+iodepthlist=8
+bslist=4k
+
+[randread]
+numjoblist=8
+bslist=4k,8k
+```
+
+Usage Help
+```
+[root@sm116 Smart-Storage]# python3 casBaseLine.py -h
+You are running Open CAS 19.06.00.00000801
+You are running Open CAS 19.06.00.00000801
+usage: casBaseLine.py [-h] --output dir [--cascfg casCfg] [--case testCase]
+                      [--debug]
+
 optional arguments:
   -h, --help       show this help message and exit
-  -cache cacheDev  The device of cache, eg. /dev/nvme
-  -core coreDev    The device of core, eg. /dev/sdb
-  -output dir      The dir to contain the perf data, eg. /home/you
+  --output dir     The dir to contain the perf data, eg. /home/you
+  --cascfg casCfg  The intelcas.conf file to use for test
+  --case testCase  By default, all test cases would be covered. Or you can
+                   choose one single test caes to run:['all', 'cachingOnly',
+                   'coreOnly', 'casOnly']
+  --debug          Enable debug mode
+```
 
-Example Usage
+Default Usage:
 ```
-[root@apss117t Smart-Storage]# python3 casBaseLine.py -cache /dev/nvme0n1p7 -core /dev/sdb6 -output /home/john/casBaseLineData/ &
-Start doing baseline CAS test using cache /dev/nvme0n1p7 and core /dev/sdb6
-The performance CSV files are in /home/john/casBaseLineData/
-Running log is /home/john/casBaseLineData/smart-storage-2019-04-29-02h-33m.log
-Please do NOT do CAS configuration during this test progress
-Just One Minute, Am estimating the running time................
-Estimated Running Time 105 minutes
-[root@apss117t Smart-Storage]# ps -ef | grep python
-root       46992   36968  0 02:33 pts/0    00:00:00 python casBaseLine.py -cache /dev/nvme0n1p7 -core /dev/sdb6 -output /home/john/casBaseLineData/
+[root@apss117t Smart-Storage]# python3 casBaseLine.py --output /home/john/
 ```
+
 This is what the above command will do:
-* Use */dev/nvme0n1p7* as cache device and */dev/sdb6* as core device to do CAS configure
-* Will trigger all kinds of workload against the exposed cached drive (eg. *intelcas1-1)
-  * Rand/Seq Read/Write Miss/Hit cases
-  * Will also collect IOSTAT and CAS Stats
-* After the test is complete, data and logs will be generated in /home/john/casBaseLineData/
+* Configure CAS using */etc/opencas/opencas.conf*
+* Run FIO based on *task.cnf*
 
 Here is the log example:
 ```
@@ -244,9 +299,10 @@ Here is the CSV files for iostat, there is one CSV file each workload:
 -rw-r--r-- 1 root root  1601 May  5 22:38 WriteSpeedCheck_IOStat_2019_05_05_22_32.csv
 ```
 
-Advance Parameters:
-* *-case testCase*: used to specify only one workload to run
-  * rndReadMiss, rndReadHit, rndWriteMiss, rndWriteHit, ReadMiss, ReadHit, WriteMiss, WriteHit, WriteOverflow
+Advanced Parameters:
+* *--case testCase*: used to specify only one workload to run
+  * cachingOnly, coreOnly, casOnly
+* *--debug*: which will enable debug mode with more traces
 
 ## Collect CAS related devices' CAS Perf and IOSTAT Data
 Tool *collectStats.py* is used to collect Intel CAS related stats:

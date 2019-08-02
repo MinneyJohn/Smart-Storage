@@ -122,7 +122,7 @@ Design Points:
     the job file by themselves. Without the "wallstone" flag,
     the logic for rerun manually is more clear
 2. The sub section should be indentified by the block device.
-    Eg. sdb, nvme0n1, intelcas1-1
+    Eg. sdb, nvme0n1, xxxcas1-1
 '''
 class fioJob():
     def __init__(self, jobName, baseJobFile):
@@ -244,7 +244,7 @@ class fioJob():
             else:
                 break
         baseName = os.path.basename(section)
-        if baseName.startswith("intelcas"):
+        if baseName.startswith(CAS_DISK_PRE):
             return True
         else:
             return False
@@ -429,27 +429,38 @@ class benchCASDisk():
         logMgr.info("Will bench in parallel: {0}".format(self._casDeviceS))
         casAdmin.initByCasCfg()
 
+        bSeqWriteWarm = False
+
         if ("write" in self._rwList) or ("randwrite" in self._rwList):
             if ("randwrite" in self._rwList):
                 # Do rand write miss
                 benchRndWrite_Miss = benchCasWrite("cas.rndWriteMiss", self._casCfgFile, self._casDeviceS, "randwrite", WRITE_MISS)
                 benchRndWrite_Miss.startBench()
 
+            if ("write" in self._rwList):
+                # Do seq write miss
+                benchSeqWrite_Miss = benchCasWrite("cas.seqWriteMiss", self._casCfgFile, self._casDeviceS, "write", WRITE_MISS)
+                benchSeqWrite_Miss.startBench()
+                bSeqWriteWarm = True
+
+            if False == bSeqWriteWarm:
+                warmCacheWork = warmCache(self._casDeviceS)
+                warmCacheWork.startWarm()
+            
+            if ("randwrite" in self._rwList):
                 # Do rand write hit
                 benchRndWrite_Hit = benchCasWrite("cas.rndWriteHit", self._casCfgFile, self._casDeviceS, "randwrite", WRITE_HIT)
                 benchRndWrite_Hit.startBench()
 
             if ("write" in self._rwList):
-                # Do seq write miss
-                benchSeqWrite_Miss = benchCasWrite("cas.seqWriteMiss", self._casCfgFile, self._casDeviceS, "write", WRITE_MISS)
-                benchSeqWrite_Miss.startBench()
                 # Do seq write hit
                 benchSeqWrite_Hit = benchCasWrite("cas.seqWriteHit", self._casCfgFile, self._casDeviceS, "write", WRITE_HIT)
                 benchSeqWrite_Hit.startBench()
         
         if (("read" in self._rwList) or ("randRead" in self._rwList)):
-            warmCacheWork = warmCache(self._casDeviceS)
-            warmCacheWork.startWarm()
+            if False == bSeqWriteWarm:
+                warmCacheWork = warmCache(self._casDeviceS)
+                warmCacheWork.startWarm()
 
         if ("read" in self._rwList):
             casSeqRead_Hit = benchCasRead("cas.seqReadHit", self._casCfgFile, self._casDeviceS, 'read', READ_HIT)

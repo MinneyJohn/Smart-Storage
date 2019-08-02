@@ -28,6 +28,9 @@ READ_HIT = 1
 WRITE_MISS = 0
 WRITE_HIT  = 2
 
+CAS_DISK_PRE = "cas"
+CAS_CFG_FILE = "/etc/intelcas/intelcas.conf"
+
 class MyTimeStamp():
     def __init__(self):
         return 0
@@ -316,7 +319,7 @@ class casAdmin():
     def addCoreToCfgTable(cls, cacheID, coreID, coreDev):
         cachingDev = cls.cachingSet[cacheID]
         cls.mapping[cacheID][coreID] = [cachingDev, coreDev,\
-                                        sysAdmin.getBlkFullPath("intelcas{0}-{1}".format(cacheID, coreID))]
+                                        sysAdmin.getBlkFullPath("{0}{1}-{2}".format(CAS_DISK_PRE, cacheID, coreID))]
         return 0
     
     @classmethod
@@ -369,7 +372,7 @@ class casAdmin():
             words = line.split(',')
             if ('cache' == words[0]):
                 cls.addCacheToCfgTable(int(words[1]), words[2])
-            elif ('core' == words[0] and words[5].startswith('/dev/intelcas')):
+            elif ('core' == words[0] and words[5].startswith('/dev/{0}'.format(CAS_DISK_PRE))):
                 (cacheID, coreID) = cls.getCacheCoreIdByDevName(words[5])
                 cls.addCoreToCfgTable(cacheID, words[1], words[2])
             else:
@@ -411,7 +414,7 @@ class casAdmin():
     @classmethod
     def getCacheCoreIdByDevName(cls, casDisk):
         casDisk = sysAdmin.getBlkFullPath(casDisk)
-        m = re.match(r"/dev/intelcas(?P<cache_id>\d+)-(?P<core_id>\d+)(\n)*", casDisk)
+        m = re.match(r"/dev/{0}(?P<cache_id>\d+)-(?P<core_id>\d+)(\n)*".format(CAS_DISK_PRE), casDisk)
         if (m):
             return (int(m.group('cache_id')), int(m.group('core_id')))
         else:
@@ -421,17 +424,45 @@ class casAdmin():
     @classmethod
     def isIntelCasDisk(cls, blkDev):
         baseName = os.path.basename(blkDev)
-        if baseName.startswith("intelcas"):
+        if baseName.startswith(CAS_DISK_PRE):
             return True
         else:
             return False
+    
+    @classmethod
+    def handleVersion(cls):
+        global CAS_DISK_PRE
+        global CAS_CFG_FILE
+        checkV = "casadm -V -o csv"
+        (ret, output) = sysAdmin.getOutPutOfCmd(checkV)
+        if 0 == ret:
+            lines = output.splitlines()
+            for line in lines:
+                if "Kernel Module" in line:
+                    words = line.split(",")
+                    version = words[1]
+                    versionWords = version.split(".")
+                    if 3 == int(versionWords[0]):
+                        logMgr.info("You are running Enterprise CAS {0}".format(version))
+                        print("You are running Enterprise CAS {0}".format(version))
+                        CAS_DISK_PRE = "intelcas"
+                        CAS_CFG_FILE = "/etc/intelcas/intelcas.conf"
+                    elif 19 == int(versionWords[0]):
+                        logMgr.info("You are running Open CAS {0}".format(version))
+                        print("You are running Open CAS {0}".format(version))
+                        CAS_DISK_PRE = "cas"
+                        CAS_CFG_FILE = "/etc/opencas/opencas.conf"
+                    else:
+                        print("**ERROR** Unknow Version")
+                        exit(1)
+        return 0
     
 # Used to config/prepare cache environment
 class sysAdmin():
     @classmethod
     def getBlockDeviceSize(cls, blkDev):
         blkDev = cls.getBlkFullPath(blkDev)
-        if blkDev.startswith("/dev/intelcas"):
+        if blkDev.startswith("/dev/{0}".format(CAS_DISK_PRE)):
             return cls.getSizeCasDisk(blkDev)
         else:
             return cls.getSizeNormalDisk(blkDev)
@@ -841,3 +872,5 @@ class taskCfg():
                 continue
             for opt in cls.taskCfg[section]:
                 print("{0}: {1}".format(opt, cls.queryOpt(section, opt)))
+
+casAdmin.handleVersion()
