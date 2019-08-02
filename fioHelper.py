@@ -457,7 +457,7 @@ class benchCASDisk():
         
         # Reconfig CAS
         if ("randread" in self._rwList):
-            casRndRead_Miss = benchCasRead('cas.rndReadMiss', self._casCfgFile, self._casDeviceS, 'rndread', READ_MISS)
+            casRndRead_Miss = benchCasRead('cas.rndReadMiss', self._casCfgFile, self._casDeviceS, 'randread', READ_MISS)
             casRndRead_Miss.startBench()
 
         '''
