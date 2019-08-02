@@ -29,7 +29,7 @@ def setupArgsParser():
                             default=CAS_CFG_FILE,\
                             help='The intelcas.conf file to use for test')
     arg_parser.add_argument('--case', metavar='testCase', required=False,\
-                            default='all', choices=validCaseList,\
+                            default='casOnly', choices=validCaseList,\
                             help="By default, all test cases would be covered. "\
                                 "Or you can choose one single test caes to run:"\
                                 "{0}".format(validCaseList))
