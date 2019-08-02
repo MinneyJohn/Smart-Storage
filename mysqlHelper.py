@@ -597,6 +597,7 @@ class benchMultipleBlkDevice():
             words = blkListStr.split(",")
             for word in words:
                 self.blkList.append(word)
+            logMgr
         else:
             return 1
 
@@ -612,7 +613,7 @@ class benchMultipleBlkDevice():
         for blkDev in self.blkList:
             logMgr.info("Start benching block device {0}".format(blkDev))
             oneDiskBench = benchOneBlockDevice(self.db, self.time)
-            oneDiskBench.startBench(kwargs = {'blkDev': blkDev})
+            oneDiskBench.startBench(kwargs = {'disk': blkDev})
             oneDiskBench.clearSystem()
 
         return 0
