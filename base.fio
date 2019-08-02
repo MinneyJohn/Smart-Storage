@@ -5,6 +5,7 @@ name=base-fio
 direct=1
 ioengine=libaio
 time_based=1
+iodepth=8
 
 numjobs=8
 runtime=120

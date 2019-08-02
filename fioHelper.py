@@ -306,11 +306,16 @@ class benchDevices():
     
     def startBench(self):
         logMgr.info("Target devices: {0}".format(self._deviceList))
+        logMgr.info("Target benchworkload: {0}".format(self._rwList))
         for workload in self._rwList:
             numJobList  = fioJob.getNumJobList(workload)
             ioDepthList = fioJob.getIoDepthList(workload)
             bsList      = fioJob.getBsList(workload)
             time        = fioJob.getRunTime(workload)
+
+            logMgr.debug("Workload {0}, numjob {1}, iodepth {2}, bs {3}, time {4}"\
+                        .format(workload, numJobList, ioDepthList, bsList, time))
+                        
             for numJob in numJobList:
                 for ioDepth in ioDepthList:
                     for bs in bsList:
@@ -360,6 +365,9 @@ class benchCasWrite(benchDevices):
         self._mode       = writeMode
         self._rw         = rw
         self._casCfgFile = casCfgFile
+        #self._rwList     = []
+        #self._rwList.append(rw)
+
         benchDevices.__init__(self, benchName, casDeviceS, rwList = [rw])
     
     def preWork(self, job):
@@ -418,6 +426,7 @@ class benchCASDisk():
 
     def startBench(self):
         # Do real CAS configuration
+        logMgr.info("Will bench in parallel: {0}".format(self._casDeviceS))
         casAdmin.initByCasCfg()
 
         if ("write" in self._rwList) or ("randwrite" in self._rwList):
