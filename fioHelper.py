@@ -352,10 +352,12 @@ class benchCasRead(benchDevices):
         benchDevices.__init__(self, benchName, casDeviceS, rwList = [rw])
 
     def preWork(self, job):
+        if READ_MISS == self._mode:
+            logMgr.info("Reconfig CAS before doing read miss")
+            casAdmin.recfgByCasCfg(self._casCfgFile)
+                
         for casDisk in self._deviceList:
             if READ_MISS == self._mode:
-                logMgr.info("Reconfig CAS before doing read miss")
-                casAdmin.recfgByCasCfg(self._casCfgFile)
                 job.setSubOpt(casDisk, 'size', "{0}G".format(casAdmin.getCoreSize(casDisk)))
             else:
                 job.setSubOpt(casDisk, 'size', "{0}G".format(casAdmin.getDirtySize(casDisk)))
@@ -370,14 +372,13 @@ class benchCasWrite(benchDevices):
 
         benchDevices.__init__(self, benchName, casDeviceS, rwList = [rw])
     
-    def preWork(self, job):
+    def preWork(self, job):    
         if WRITE_MISS == self._mode:
+            logMgr.info("Reconfig CAS before doing write miss")
+            casAdmin.recfgByCasCfg(self._casCfgFile)
             for casDisk in self._deviceList:
-                logMgr.info("Reconfig CAS before doing write miss")
-                casAdmin.recfgByCasCfg(self._casCfgFile)
                 cachingSize = sysAdmin.getBlockDeviceSize(casDisk)
-                job.setSubOpt(casDisk, 'size', "{0}G".format(cachingSize))
-                
+                job.setSubOpt(casDisk, 'size', "{0}G".format(cachingSize))       
         elif WRITE_HIT == self._mode:
             for casDisk in self._deviceList:
                 dirtySize = casAdmin.getDirtySize(casDisk)
