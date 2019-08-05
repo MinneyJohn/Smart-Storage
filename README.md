@@ -222,27 +222,35 @@ Example of *task.cnf*
 * For *randread*, will try FIO with *"numjob=8" and "bs=4k"/"bs=8k"*
 ```
 [fio_global]
-rwList=read,randread,write,randwrite
-time=600
+rwList=read,write,randread,randwrite,randrw
+time=120
 
 [read]
-numjoblist=1
-iodepthlist=8
-bslist=128k
+numjobs=1
+iodepth=8
+bs=128k
 
 [write]
-numjoblist=1
-iodepthlist=8
-bslist=64k
+numjobs=1,4
+iodepth=8
+bs=64k,128k
 
 [randwrite]
-numjoblist=8,16
-iodepthlist=8
-bslist=4k
+numjobs=8
+iodepth=8
+bs=4k,8k
 
 [randread]
-numjoblist=8
-bslist=4k,8k
+numjobs=8
+iodepth=8,16,32
+bs=4k,8k
+
+[randrw]
+numjobs=8
+iodepth=8
+bs=4k,8k
+rwmixread=70
+random_distribution=zipf:1.2
 ```
 
 Usage Help
