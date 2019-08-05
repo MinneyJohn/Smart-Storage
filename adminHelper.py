@@ -872,5 +872,12 @@ class taskCfg():
                 continue
             for opt in cls.taskCfg[section]:
                 print("{0}: {1}".format(opt, cls.queryOpt(section, opt)))
+    
+    @classmethod
+    def querySection(cls, section):
+        if section in cls.taskCfg:
+            return cls.taskCfg[section]
+        else:
+            return {}
 
 casAdmin.handleVersion()

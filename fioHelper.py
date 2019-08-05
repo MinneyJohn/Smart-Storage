@@ -8,6 +8,7 @@ import datetime
 import os
 from threading import Timer
 import argparse
+import itertools
 
 from adminHelper import *
 from loggerHelper import *
@@ -132,7 +133,18 @@ class fioJob():
                         .format(jobName, MyTimeStamp.getAppendTime())) 
         
         self.jobCfg.read(baseJobFile)
+        # self.setByGlobal()
         
+    def setByGlobal(self):
+        optS = fioJob.fetchOptions("fio_global")
+        for opt in optS:
+            self.setGlobalOpt(opt, optS[opt])  
+    
+    def finalizeJobName(self, jobName):
+        self.jobName = jobName
+        self.jobFile = os.path.join(logMgr.getDataDir(), "{0}.{1}.fio"\
+                        .format(jobName, MyTimeStamp.getAppendTime())) 
+
     # Used to get FIO setting from task.cnf
     @classmethod
     def getSetting(cls, work, opt):
@@ -151,18 +163,6 @@ class fioJob():
         return worklist
 
     @classmethod
-    def getNumJobList(cls, work):
-        numjobList = []
-        numjobListStr = cls.getSetting(work, 'numjoblist')
-        if "" == numjobListStr:
-            return [8]
-        else:
-            words = numjobListStr.split(",")
-            for word in words:
-                numjobList.append(int(word))
-            return numjobList
-    
-    @classmethod
     def getRunTime(cls, work):
         timeStr = cls.getSetting(work, 'time')
         if "" == timeStr:
@@ -170,30 +170,6 @@ class fioJob():
         else:
             return int(timeStr)
             
-    @classmethod
-    def getBsList(cls, work):
-        bsList = []
-        bsListStr = cls.getSetting(work, 'bslist')
-        if "" == bsListStr:
-            return ['4k']
-        else:
-            words = bsListStr.split(",")
-            for word in words:
-                bsList.append(word)
-            return bsList
-    
-    @classmethod
-    def getIoDepthList(cls, work):
-        iodepthList = []
-        iodepthListStr = cls.getSetting(work, 'iodepthlist')
-        if "" == iodepthListStr:
-            return [8]
-        else:
-            words = iodepthListStr.split(",")
-            for word in words:
-                iodepthList.append(int(word))
-            return iodepthList
-
     def saveJobFile(self):
         with open(self.jobFile, "w") as configfile:
             logMgr.debug("Save the fio job to {0}".format(self.jobFile))
@@ -286,6 +262,19 @@ class fioJob():
             casPerfThread.join()
 
         return 0
+    
+    @classmethod
+    def fetchOptions(cls, workload):
+        localOptS  = taskCfg.querySection(workload)
+        optWithList = {}
+        for opt in localOptS:
+            settingList = []
+            settingStr  = localOptS[opt]
+            wordS       = settingStr.split(",")
+            for word in wordS:
+                settingList.append(word)
+            optWithList[opt] = settingList
+        return optWithList
 
 class benchDevices():
     def __init__(self, benchName, devicesIn, rwList = []):
@@ -308,37 +297,50 @@ class benchDevices():
         logMgr.info("Target devices: {0}".format(self._deviceList))
         logMgr.info("Target benchworkload: {0}".format(self._rwList))
         for workload in self._rwList:
-            numJobList  = fioJob.getNumJobList(workload)
-            ioDepthList = fioJob.getIoDepthList(workload)
-            bsList      = fioJob.getBsList(workload)
-            time        = fioJob.getRunTime(workload)
+            # Fetch fio setting for this workload
+            optS = fioJob.fetchOptions(workload)
+            logMgr.debug("Options for {0} is: {1}".format(workload, optS))
+            
+            # Iterate every possible combination using product
+            index = 0
+            twoDList = []
+            optName  = {}          
+            for opt in optS:
+                twoDList.append(optS[opt])
+                optName[index] = opt
+                index += 1
 
-            logMgr.debug("Workload {0}, numjob {1}, iodepth {2}, bs {3}, time {4}"\
-                        .format(workload, numJobList, ioDepthList, bsList, time))
-                        
-            for numJob in numJobList:
-                for ioDepth in ioDepthList:
-                    for bs in bsList:
-                        jobName = "{0}.{1}.{2}.{3}jobs.{4}depth"\
-                                .format(self._benchName, workload, bs, numJob, ioDepth)
-                        
-                        job = fioJob(jobName, BASE_JOB_FILE)
-                        job.setGlobalOpt('numjobs', numJob)
-                        job.setGlobalOpt('bs', bs)
-                        job.setGlobalOpt('iodepth', ioDepth)
-                        job.setGlobalOpt('rw', workload)
-                        job.setGlobalOpt('runtime', time)
-                        
-                        for device in self._deviceList:
-                            job.addOneSub(device)
-                            job.setSubOpt(device, 'name', os.path.basename(device))
-                            job.setSubOpt(device, 'filename', device)
-                            job.setSubOpt(device, 'size', "{0}G".format(sysAdmin.getBlockDeviceSize(device)))
-                            logMgr.debug("Adding device {0} to fio job".format(device))
+            for oneSetting in itertools.product(*twoDList):
+                # Create the job obj
+                job = fioJob(workload, BASE_JOB_FILE)
+                job.setGlobalOpt('rw', workload)
 
-                        self.preWork(job)    
-                        job.run()
-                        self.postWork(job)
+                index = 0
+                while index < len(oneSetting):
+                    job.setGlobalOpt(optName[index], oneSetting[index])
+                    logMgr.debug("Setting {0} to {1}".format(optName[index], oneSetting[index]))
+                    index += 1
+                
+                # Refresh the jobname after setting bs/numjobs/iodepth
+                bs      = job.getGlobalOpt("bs")
+                numJob  = job.getGlobalOpt("numjobs")
+                ioDepth = job.getGlobalOpt("iodepth")
+                jobName = "{0}.{1}.{2}.{3}jobs.{4}depth"\
+                            .format(self._benchName, workload, bs, numJob, ioDepth)
+                job.finalizeJobName(jobName)
+
+                # Set device specific options                
+                for device in self._deviceList:
+                    job.addOneSub(device)
+                    job.setSubOpt(device, 'name', os.path.basename(device))
+                    job.setSubOpt(device, 'filename', device)
+                    job.setSubOpt(device, 'size', "{0}G".format(sysAdmin.getBlockDeviceSize(device)))
+                    logMgr.debug("Adding device {0} to fio job".format(device))
+
+                # Trigger the fio job
+                self.preWork(job)    
+                job.run()
+                self.postWork(job)
         return 0
 
 # Read Mode: 0 - miss; 1 - hit without warm; 2 - hit with warm;
@@ -383,7 +385,21 @@ class benchCasWrite(benchDevices):
             for casDisk in self._deviceList:
                 dirtySize = casAdmin.getDirtySize(casDisk)
                 job.setSubOpt(casDisk, 'size', "{0}G".format(dirtySize))
+
+class benchCasMix(benchDevices):
+    def __init__(self, benchName, casCfgFile, casDeviceS, rw):
+        self._rw         = rw
+        self._casCfgFile = casCfgFile
+        #self._rwList     = []
+        #self._rwList.append(rw)
+        benchDevices.__init__(self, benchName, casDeviceS, rwList = [rw])
     
+    def preWork(self, job):    
+        logMgr.info("Reconfig CAS before doing mix workload")
+        casAdmin.recfgByCasCfg(self._casCfgFile)
+        for casDisk in self._deviceList:
+            job.setSubOpt(casDisk, 'size', "{0}G".format(casAdmin.getCoreSize(casDisk)))
+            
 class warmCache():
     def __init__(self, casDeviceS):
         self._casDeviceS = casDeviceS
@@ -481,12 +497,9 @@ class benchCASDisk():
             casRndRead_Miss = benchCasRead('cas.rndReadMiss', self._casCfgFile, self._casDeviceS, 'randread', READ_MISS)
             casRndRead_Miss.startBench()
 
-        '''
-        # Reconfig CAS
-        casAdmin.redoByCasCfg(casCfg)
-        casDevices = []
-        casMixReadWrite()
-        '''
+        if ("randrw" in self._rwList):
+            casMix = benchCasMix('cas.rndReadMiss', self._casCfgFile, self._casDeviceS, 'randrw')
+            casMix.startBench()
         
         casAdmin.clearByCasCfg()
 
