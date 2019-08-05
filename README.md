@@ -278,6 +278,7 @@ Default Usage:
 
 This is what the above command will do:
 * Configure CAS using */etc/opencas/opencas.conf*
+  * Should be */etc/intelcas/intelcas.conf* for traditional enterprise version
 * Run FIO based on *task.cnf*
 
 Here is the log example:
