@@ -195,6 +195,7 @@ Configure Your Test:
   * Refer to https://open-cas.github.io/guide_configuring.html for details
   * You should specify the caching device and core devices you want to test
   * Multiple caching devices and cores are supported
+  * Please make sure those caching/core devices are NOT being used or in /etc/fstab
 * Prepare *task.cnf* in the directory where you download this tool set
   * This file is used to control how your FIO should run
 
