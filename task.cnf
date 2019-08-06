@@ -13,7 +13,7 @@ ROWS=1000000
 # read,write,randread,randwrite,randrw
 [fio_global]
 rwList=randrw
-time=120
+runtime=180
 
 [read]
 numjobs=1
@@ -37,7 +37,8 @@ bs=4k,8k
 
 [randrw]
 numjobs=8
-iodepth=8
+iodepth=8,32
 bs=4k,8k
 rwmixread=70
 random_distribution=zipf:1.2
+bssplit=4k/18:128k/27:512k/,4k/:512k/19:1m/21:2m/26:4m/26

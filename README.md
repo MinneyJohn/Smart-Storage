@@ -221,10 +221,11 @@ Example of *task.cnf*
 * The test will cover FIO workload *read,randread,write,randwrite*
 * For *read*, will try FIO with *"numjob=1", "iodepth=8" and "bs=128K"*
 * For *randread*, will try FIO with *"numjob=8" and "bs=4k"/"bs=8k"*
+* For *bssplit*, *"4k/18:128k/27:512k/"* is the read io size distribution and *"4k/:512k/19:1m/21:2m/26:4m/26"* is the write io size distribution
 ```
 [fio_global]
 rwList=read,write,randread,randwrite,randrw
-time=120
+runtime=120
 
 [read]
 numjobs=1
@@ -246,12 +247,12 @@ numjobs=8
 iodepth=8,16,32
 bs=4k,8k
 
-[randrw]
 numjobs=8
-iodepth=8
+iodepth=8,32
 bs=4k,8k
 rwmixread=70
 random_distribution=zipf:1.2
+bssplit=4k/18:128k/27:512k/,4k/:512k/19:1m/21:2m/26:4m/26
 ```
 
 Usage Help

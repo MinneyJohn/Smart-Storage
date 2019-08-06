@@ -164,7 +164,7 @@ class fioJob():
 
     @classmethod
     def getRunTime(cls, work):
-        timeStr = cls.getSetting(work, 'time')
+        timeStr = cls.getSetting(work, 'runtime')
         if "" == timeStr:
             return 600
         else:
@@ -270,9 +270,14 @@ class fioJob():
         for opt in localOptS:
             settingList = []
             settingStr  = localOptS[opt]
-            wordS       = settingStr.split(",")
-            for word in wordS:
-                settingList.append(word)
+
+            # Handling Special FIO options which support "," by default
+            if "bssplit" == opt:
+                settingList.append(settingStr)
+            else:
+                wordS       = settingStr.split(",")
+                for word in wordS:
+                    settingList.append(word)
             optWithList[opt] = settingList
         return optWithList
 
@@ -321,6 +326,10 @@ class benchDevices():
                     logMgr.debug("Setting {0} to {1}".format(optName[index], oneSetting[index]))
                     index += 1
                 
+                time = fioJob.getRunTime(workload)
+                job.setGlobalOpt('runtime', time)
+                logMgr.debug("Setting runtime to {0}".format(time))
+
                 # Refresh the jobname after setting bs/numjobs/iodepth
                 bs      = job.getGlobalOpt("bs")
                 numJob  = job.getGlobalOpt("numjobs")
