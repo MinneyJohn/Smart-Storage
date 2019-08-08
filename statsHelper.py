@@ -127,16 +127,11 @@ class casPerfStats(cycleStatsCollector):
             self._filterCacheID = INVALID_CACHE_ID
         
     def parseOneLine(self, line):
-        if "cacheID" not in self._kwargs_parse:
-            return ""
-
-        # It is a header, just skip it
         if line.startswith("Core Id"):
             return ""
-
-        cacheID = self._kwargs_parse['cacheID']
+        
         (dateStr, timeStr) = MyTimeStamp.getDateAndTime(SECOND)
-        new_line = "{0}, {1}, {2}, {3}\n".format(dateStr, timeStr, cacheID, line)
+        new_line = "{0}, {1}, {2}\n".format(dateStr, timeStr, line)
         return new_line
     
     def generateHeader(self, lines):
@@ -149,6 +144,8 @@ class casPerfStats(cycleStatsCollector):
     def validateCycleOutPut(self, lines):
         if (1 >= len(lines)):
             return False
+        
+        # Already pass header when getting the lines
         if (False == lines[0].startswith("Core Id,Core Device,Exported Object")):
             return False
 
@@ -158,7 +155,10 @@ class casPerfStats(cycleStatsCollector):
         raw_info = ""
 
         casDevices = casAdmin.getAllCasDevices()
-
+        
+        lineSum = []
+        bHasHeader = False
+            
         for casDisk in casDevices:
             (cacheID, coreID) = casAdmin.getCacheCoreIdByDevName(casDisk)
             if (INVALID_CACHE_ID == self._filterCacheID):
@@ -169,12 +169,21 @@ class casPerfStats(cycleStatsCollector):
                 continue
             
             raw_info = self.getRawStats(cacheID, coreID)
-            
-            # Set kwargs for one line parsing
-            self.setParseKwargs({'cacheID': cacheID})
 
+            linesPerCache = raw_info.splitlines()
+            for line in linesPerCache:
+                if line.startswith("Core Id"):
+                    if False == bHasHeader:
+                        lineSum.append(line)
+                        bHasHeader = True
+                    else:
+                        pass
+                else:
+                    line = "{0},{1}".format(cacheID, line)
+                    lineSum.append(line)
+            
             self.resetPerfStat(cacheID, coreID)
-        return raw_info.splitlines()
+        return lineSum
 
 class mysqlBufferPoolStats(cycleStatsCollector):
     mySqlFileDir = "/var/lib/mysql-files/"
@@ -339,9 +348,9 @@ class longRunStatsCollector():
 
 class ioStats(longRunStatsCollector):
     def getAllDev(self):
-        coreDiskS  = casAdmin.getAllCoreDevices(cacheID_filter = cache_id)
-        casDiskS   = casAdmin.getAllCasDevices(cacheID_filter = cache_id)
-        cacheDiskS = casAdmin.getAllCachingDevices(cacheID_filter = cache_id)        
+        coreDiskS  = casAdmin.getAllCoreDevices(cacheID_filter = self._cacheID)
+        casDiskS   = casAdmin.getAllCasDevices(cacheID_filter = self._cacheID)
+        cacheDiskS = casAdmin.getAllCachingDevices(cacheID_filter = self._cacheID)        
         return "{0}".format(" ".join(str(x) for x in  coreDiskS+casDiskS+cacheDiskS))
     
     def getDevListByCacheId(self, cache_id):

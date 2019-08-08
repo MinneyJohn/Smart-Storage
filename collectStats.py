@@ -55,7 +55,7 @@ if __name__ == "__main__":
     casAdmin.refreshRunning()
 
     casPerf = casPerfStats(CYCLE_TIME, RUNNINGT_TIME, logMgr.getDataDir())
-    ioStats = ioStats(CYCLE_TIME, RUNNINGT_TIME, logMgr.getDataDir(), kwargs = {'cacheID': 1})
+    ioStats = ioStats(CYCLE_TIME, RUNNINGT_TIME, logMgr.getDataDir())
     (ret, casPerfGoing) = casPerf.start()
     if ret:
         exit(0)
