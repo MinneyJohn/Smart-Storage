@@ -528,6 +528,44 @@ class sysAdmin():
             return True
         else:
             return False
+    
+    # Return the place of the repo
+    @classmethod
+    def cloneRepository(cls, link, targetdir, targetname, version):
+        cloneCmd = "git clone {0} {1}".format(link, os.path.join(targetdir, targetname))
+        (ret, output) = cls.getOutPutOfCmd(cloneCmd)
+
+        checkOut = "cd {0} && git checkout {1}".format(os.path.join(targetdir, targetname), version)
+        (ret, output) = cls.getOutPutOfCmd(checkOut)
+
+        if ret:
+            return ""
+        else:
+            return os.path.join(targetdir, targetname)
+
+
+    @classmethod
+    def buildAndInstallRepo(cls, repodir, reponame, prefix=""):
+        if "zstd" == reponame:
+            if prefix:
+                command = "cd {0} && make -j32 && make PREFIX={1} install".format(repodir, prefix)
+            else:
+                command = "cd {0} && make -j32 && make install".format(repodir)
+        elif "gflags" == reponame:
+            if prefix:
+                command = "cd {0} && ./configure --prefix={1} && make -j32 && make install".format(repodir, prefix)
+            else:
+                command = "cd {0} && ./configure && make -j32 && make install".format(repodir)
+        elif "rocksdb" == reponame:
+            if prefix:
+                command = "cd {0} && DEBUG_LEVEL=0 CPATH={1} make EXTRA_LDFLAGS=\" -L{2} \" static_lib tools db_bench -j32"\
+                            .format(repodir, os.path.join(prefix, "include"), os.path.join(prefix, "lib"))
+            else:
+                command = "cd {0} && DEBUG_LEVEL=0 make static_lib tools db_bench -j32".format(repodir)
+        
+        (ret, output) = cls.getOutPutOfCmd(command)
+
+        return ret
         
     '''
     [root@sm114 Smart-Storage]# blkid -po udev /dev/nvme1n1
@@ -631,6 +669,12 @@ class sysAdmin():
                 words = line.split()
                 return words[0]
         return ""
+    
+    @classmethod
+    def setUlimit(cls, nfiles):
+        ulimitcmd = "ulimit -n {0}".format(nfiles)
+        (ret, dfOut) = cls.getOutPutOfCmd(ulimitcmd)
+        return ret
 
 '''
 This class is used for access/change the mysql configuration file my.cnf
@@ -850,10 +894,10 @@ class longTask():
 
 class taskCfg():
     taskCfg = configparser.ConfigParser(allow_no_value=True)
-    taskCfg.read("task.cnf")
     
     @classmethod
     def queryOpt(cls, section, opt):
+        cls.taskCfg.read("task.cnf")
         if section in cls.taskCfg:
             if opt in cls.taskCfg[section]:
                 optStr = cls.taskCfg[section][opt]
@@ -867,6 +911,7 @@ class taskCfg():
     @classmethod
     def showOpt(cls, sectionName = ""):
         print("Your bench mark is configured as follows:")
+        cls.taskCfg.read("task.cnf")
         for section in cls.taskCfg:
             if (sectionName and (section != sectionName)):
                 continue
@@ -875,6 +920,7 @@ class taskCfg():
     
     @classmethod
     def querySection(cls, section):
+        cls.taskCfg.read("task.cnf")
         if section in cls.taskCfg:
             return cls.taskCfg[section]
         else:

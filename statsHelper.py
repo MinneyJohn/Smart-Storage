@@ -105,7 +105,7 @@ class cycleStatsCollector:
 
 class casPerfStats(cycleStatsCollector):
     def getRawStats(self, cache_id, core_id): # class specific function
-        stats_cmd = 'casadm -P -i {0} -j {1} -o csv'.format(cache_id, core_id)
+        stats_cmd = 'casadm -P -i {0} -j {1} -d -o csv'.format(cache_id, core_id)
         (ret, output) = sysAdmin.getOutPutOfCmd(stats_cmd)
         if 0 == ret:
             return output
