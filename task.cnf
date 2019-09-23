@@ -12,11 +12,11 @@ ROWS=1000000
 
 [db_bench_env]
 installDir=/home/john/rocksdb-runing
-LD_LIBRARY_PATH=/home/john/test/gflags/.libs/:/home/john/test/zstd/lib
-db_bench_path=/home/john/test/rocksdb/db_bench
+#LD_LIBRARY_PATH=/home/john/test/gflags/.libs/:/home/john/test/zstd/lib
+#db_bench_path=/home/john/test/rocksdb/db_bench
 
 [db_bench]
-db=/mnt/rocksdb-o-plus-q
+db=/mnt/rocksdb-tlc
 num_levels=6
 key_size=64
 value_size=1024
@@ -51,9 +51,9 @@ level0_slowdown_writes_trigger=16
 level0_stop_writes_trigger=24
 benchmarks=readwhilewriting
 use_existing_db=1
-num=1000000
+num=1000000000
 threads=4
-duration=120
+duration=12000
 
 # read,write,randread,randwrite,randrw
 [fio_global]

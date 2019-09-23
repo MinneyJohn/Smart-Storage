@@ -24,7 +24,7 @@ def setupArgsParser():
     arg_parser.add_argument('--output', metavar='outputDir', required=True, \
                             help="Output directory to store the log and perf data")   
     arg_parser.add_argument('--debug', help="Enable debug mode\n", action="store_true")
-
+    arg_parser.add_argument('--reinstall', help="Reinstall the rocksdb, gflags and zsds\n", action="store_true")
     return 0
 
 def verifyArgs():
@@ -49,7 +49,8 @@ if __name__ == "__main__":
     taskCfg.showOpt("db_bench")
 
     testRocksDB = rocksdbHelper.rocksDB()
-    testRocksDB.doInstall()
+    if True == args.reinstall:
+        testRocksDB.doInstall()
     testRocksDB.prepareDB()
     testRocksDB.rundbBench()
     
