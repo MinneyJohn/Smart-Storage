@@ -79,9 +79,9 @@ class rocksDB():
         
         cmdStr = ""
         if self.LD_LIBRARY_PATH:
-            cmdStr = "LD_LIBRARY_PATH={0} {1}".format(self.LD_LIBRARY_PATH, self.db_bench_path)
+            cmdStr = "ulimit -n 100000 && LD_LIBRARY_PATH={0} {1}".format(self.LD_LIBRARY_PATH, self.db_bench_path)
         else:
-            cmdStr = self.db_bench_path
+            cmdStr = "ulimit -n 100000 && {0}".format(self.db_bench_path)
             
         for optName in localRunCfg:
             if (True == bPrepare and "duration" == optName): # Skip "duration" for prepare db
